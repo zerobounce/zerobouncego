@@ -1,3 +1,3 @@
-module github.com/antsanchez/gozerobounce
+module github.com/zerobounce-llc/zerobounce
 
-go 1.15
+go 1.20

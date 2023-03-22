@@ -6,7 +6,7 @@ THIS PROJECT IS STILL IN DEVELOPMENT!
 
 ## Installation and Usage
 ```sh
-go get github.com/antsanchez/gozerobounce
+go get github.com/zerobounce-llc/zero-bounce-go
 ```
 
 You can use it like this:
@@ -17,16 +17,16 @@ import (
     "fmt"
     "os"
 
-    "github.com/antsanchez/gozerobounce"
+    "github.com/zerobounce-llc/zero-bounce-go"
 )
 
 func main() {
 
-    gozerobounce.APIKey = "... Your API KEY ..." 
+    zerobounce.APIKey = "... Your API KEY ..." 
 
     // For Querying a single E-Mail and IP
     // IP can also be an empty string
-    response := gozerobounce.Validate("email@example.com", "123.123.123.123")
+    response := zerobounce.Validate("email@example.com", "123.123.123.123")
 
     // Now you can check status
     if response.Status == "valid" {
@@ -39,7 +39,7 @@ func main() {
     }
 
     // You can also check your credits 
-    credits := gozerobounce.GetCredits()
+    credits := zerobounce.GetCredits()
     fmt.Println("Credits left:", credits.Credits)
 }
 ```

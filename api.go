@@ -1,4 +1,4 @@
-package gozerobounce
+package zerobounce
 
 import (
 	"encoding/json"
@@ -47,10 +47,7 @@ type ValidateResponse struct {
 
 // IsValid checks if an email is valid
 func (v *ValidateResponse) IsValid() bool {
-	if v.Status == "valid" {
-		return true
-	}
-	return false
+	return v.Status == "valid"
 }
 
 // PrepareURL prepares the URL
@@ -74,7 +71,7 @@ func DoRequest(url string, object APIResponse) error {
 
 	// Check if server response is not HTTP 200
 	if response.StatusCode != 200 {
-		return errors.New("Server error")
+		return errors.New("server error")
 	}
 
 	// Close the request

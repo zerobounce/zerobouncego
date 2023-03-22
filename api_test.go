@@ -1,4 +1,4 @@
-package gozerobounce
+package zerobounce
 
 import "testing"
 
@@ -10,6 +10,8 @@ type SingleTest struct {
 	SubStatus string
 	FreeEmail bool
 }
+
+// add test for unknown@example.com also
 
 var emailsToValidate = []SingleTest{
 	{Email: "disposable@example.com", Status: "do_not_mail", SubStatus: "disposable"},
