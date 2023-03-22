@@ -1,3 +1,3 @@
-module github.com/zerobounce-llc/zero-bounce-go
+module github.com/zerobounce-llc/zero_bounce_go
 
 go 1.20

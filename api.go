@@ -1,4 +1,4 @@
-package zerobounce
+package zero_bounce_go
 
 import (
 	"encoding/json"
