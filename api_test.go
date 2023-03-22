@@ -1,4 +1,4 @@
-package zero_bounce_go
+package zerobouncego
 
 import "testing"
 
