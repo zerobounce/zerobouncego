@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"github.com/joho/godotenv"
 )
 
 // CONSTANTS
@@ -70,6 +71,15 @@ var API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
 
 func SetApiKey(new_api_key_value string) {
 	API_KEY = new_api_key_value
+}
+
+func ImportApiKeyFromEnvFile() {
+	error_ := godotenv.Load(".env") 
+	if error_ != nil {
+		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
+		return
+	}
+	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
 }
 
 

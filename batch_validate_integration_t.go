@@ -27,6 +27,7 @@ func TestInvalidApiKey(t *testing.T) {
 }
 
 func TestBulkEmailValidation(t *testing.T) {
+	ImportApiKeyFromEnvFile()
 	response, error_ := ValidateBatch(EmailsToValidate())
 	if error_ != nil {
 		fmt.Println(error_)
