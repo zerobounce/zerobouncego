@@ -103,7 +103,6 @@ type GetApiUsageResponse struct {
 	EndDate string `json:"end_date"`
 }
 
-
 // Validate validates a single email
 func Validate(email string, IPAddress string) (*ValidateResponse, error) {
 
@@ -115,7 +114,7 @@ func Validate(email string, IPAddress string) (*ValidateResponse, error) {
 	response := &ValidateResponse{}
 
 	// Do the request
-	err := DoRequest(PrepareURL("validate", params), response)
+	err := DoGetRequest(PrepareURL(ENDPOINT_VALIDATE, params), response)
 	return response, err
 }
 
@@ -123,7 +122,7 @@ func Validate(email string, IPAddress string) (*ValidateResponse, error) {
 func GetCredits() (*CreditsResponse, error) {
 
 	response := &CreditsResponse{}
-	err := DoRequest(PrepareURL("getcredits", url.Values{}), response)
+	err := DoGetRequest(PrepareURL(ENDPOINT_CREDITS, url.Values{}), response)
 	return response, err
 }
 
@@ -133,6 +132,6 @@ func GetApiUsage(start_date, end_date time.Time) (*GetApiUsageResponse, error) {
 	request_parameters := url.Values{}
 	request_parameters.Set("start_date", start_date.Format(time.DateOnly))
 	request_parameters.Set("end_date", end_date.Format(time.DateOnly))
-	err := DoRequest(PrepareURL("getapiusage", request_parameters), response)
+	err := DoGetRequest(PrepareURL(ENDPOINT_API_USAGE, request_parameters), response)
 	return response, err
 }
