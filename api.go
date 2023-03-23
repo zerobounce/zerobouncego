@@ -3,6 +3,7 @@ package zerobouncego
 import (
 	"net/url"
 	"time"
+	"gopkg.in/guregu/null.v4"
 )
 
 // URI URL for the requests
@@ -14,25 +15,25 @@ type CreditsResponse struct {
 
 // ValidateResponse Response from API
 type ValidateResponse struct {
-	Address       string      `json:"address"`
-	Status        string      `json:"status"`
-	SubStatus     string      `json:"sub_status"`
-	FreeEmail     bool        `json:"free_email"`
-	DidYouMean    interface{} `json:"did_you_mean"`
-	Account       string      `json:"account"`
-	Domain        string      `json:"domain"`
-	DomainAgeDays string      `json:"domain_age_days"`
-	SMTPProvider  string      `json:"smtp_provider"`
-	MxRecord      string      `json:"mx_record"`
-	MxFound       string      `json:"mx_found"`
-	Firstname     string      `json:"firstname"`
-	Lastname      string      `json:"lastname"`
-	Gender        string      `json:"gender"`
-	Country       string      `json:"country"`
-	Region        string      `json:"region"`
-	City          string      `json:"city"`
-	Zipcode       string      `json:"zipcode"`
-	ProcessedAt   string      `json:"processed_at"`
+	Address       string		`json:"address"`
+	Status        string		`json:"status"`
+	SubStatus     string		`json:"sub_status"`
+	FreeEmail     bool			`json:"free_email"`
+	DidYouMean    null.String	`json:"did_you_mean"`
+	Account       string		`json:"account"`
+	Domain        string		`json:"domain"`
+	DomainAgeDays null.String	`json:"domain_age_days"`
+	SMTPProvider  null.String	`json:"smtp_provider"`
+	MxRecord      string		`json:"mx_record"`
+	MxFound       string		`json:"mx_found"`
+	Firstname     null.String	`json:"firstname"`
+	Lastname      null.String	`json:"lastname"`
+	Gender        null.String	`json:"gender"`
+	Country       null.String	`json:"country"`
+	Region        null.String	`json:"region"`
+	City          null.String	`json:"city"`
+	Zipcode       null.String	`json:"zipcode"`
+	ProcessedAt   string      	`json:"processed_at"`
 }
 
 // IsValid checks if an email is valid
