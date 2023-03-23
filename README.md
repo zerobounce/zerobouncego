@@ -9,6 +9,14 @@ THIS PROJECT IS STILL IN DEVELOPMENT!
 go get github.com/zerobounce-llc/zerobouncego
 ```
 
+This package uses the zero-bounce API which requires an API key. This key can either be provide in two ways:
+1. through an environment variable `ZERO_BOUNCE_API_KEY`
+2. by settings explicitly in code, using the following method:
+```go
+zerobouncego.SetApiKey("mysecretapikey")
+```
+
+
 You can use it like this:
 ```go
 package main
@@ -16,7 +24,6 @@ package main
 import (
     "fmt"
     "os"
-
     "github.com/zerobounce-llc/zerobouncego"
 )
 

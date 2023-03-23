@@ -1,8 +1,8 @@
 package zerobouncego
 
-import "testing"
-
-const KEY = ""
+import (
+	"testing"
+)
 
 type SingleTest struct {
 	Email     string
@@ -46,8 +46,6 @@ var emailsToValidate = []SingleTest{
 }
 
 func TestValidate(t *testing.T) {
-
-	APIKey = KEY
 
 	for _, e := range emailsToValidate {
 
