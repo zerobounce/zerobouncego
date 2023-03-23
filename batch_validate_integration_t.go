@@ -1,8 +1,6 @@
 package zerobouncego
 
 
-// TODO: DISABLE INTEGRATION TESTS AND ONLY KEEP UNIT TESTS
-
 import (
 	"fmt"
 	"testing"

@@ -51,6 +51,16 @@ func main() {
 }
 ```
 
+## Testing
+
+This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the one ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
+
+In order to run the integration tests:
+- set appropriate `ZERO_BOUNCE_API_KEY` environment variable
+- rename all "_integration_t.go" into "_integration_test.go"
+- run either individual or all tests (`go test .`)
+
+
 ## Already implemented
 - Validate single email
 - Get gredits

@@ -61,6 +61,8 @@ const (
 	SS_TOXIC						BatchEmailSubStatus = "toxic"
 )
 
+// APIResponse basis for api responses
+type APIResponse interface{}
 
 // FUNCTIONS
 
@@ -70,10 +72,6 @@ func SetApiKey(new_api_key_value string) {
 	API_KEY = new_api_key_value
 }
 
-// IsValid checks if an email is valid
-func (v *ValidateResponse) IsValid() bool {
-	return v.Status == "valid"
-}
 
 // PrepareURL prepares the URL
 func PrepareURL(endpoint string, params url.Values) string {

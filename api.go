@@ -7,9 +7,6 @@ import (
 
 // URI URL for the requests
 
-// APIResponse basis for api responses
-type APIResponse interface{}
-
 // CreditsResponse response of the credits balance
 type CreditsResponse struct {
 	Credits string `json:"Credits"`
@@ -36,6 +33,11 @@ type ValidateResponse struct {
 	City          string      `json:"city"`
 	Zipcode       string      `json:"zipcode"`
 	ProcessedAt   string      `json:"processed_at"`
+}
+
+// IsValid checks if an email is valid
+func (v *ValidateResponse) IsValid() bool {
+	return v.Status == "valid"
 }
 
 type GetApiUsageResponse struct {
