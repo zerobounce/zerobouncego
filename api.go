@@ -35,11 +35,11 @@ type ValidateResponse struct {
 	Region        null.String	`json:"region"`
 	City          null.String	`json:"city"`
 	Zipcode       null.String	`json:"zipcode"`
-	processedAtRaw string      	`json:"processed_at"`
+	RawProcessedAt string      	`json:"processed_at"`
 }
 
 func (v ValidateResponse)ProcessedAt() (time.Time, error) {
-	return time.Parse(time.DateTime, strings.Trim(v.processedAtRaw, `"`))
+	return time.Parse(time.DateTime, strings.Trim(v.RawProcessedAt, `"`))
 }
 
 // IsValid checks if an email is valid
