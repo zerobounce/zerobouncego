@@ -2,8 +2,7 @@ package zerobouncego
 
 import (
 	"encoding/json"
-	"errors"
-	"io"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,14 +17,14 @@ type EmailToValidate struct {
 
 // RESPONSE related structures
 
-type EmailBatchErrorResponse struct {
+type EmailBatchError struct {
 	Error        string `json:"error"`
 	EmailAddress string `json:"email_address"`
 }
 
 type ValidateBatchResponse struct {
-	EmailBatch []ValidateResponse        `json:"email_batch"`
-	Errors     []EmailBatchErrorResponse `json:"errors"`
+	EmailBatch []ValidateResponse	`json:"email_batch"`
+	Errors     []EmailBatchError	`json:"errors"`
 }
 
 func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error) {
@@ -33,36 +32,34 @@ func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error)
 	var error_ error
 
 	// request preparation
-	payload_data := make(map[string]interface{})
-	payload_data["api_key"] = API_KEY
-	payload_data["email_batch"] = emails_list
-	request_payload := &strings.Builder{}
-	encode_error := json.NewEncoder(request_payload).Encode(payload_data)
+	payload_data := map[string]interface{}{
+		"api_key": API_KEY,
+		"email_batch": emails_list,
+	}
+	request_payload_builder := &strings.Builder{}
+	encode_error := json.NewEncoder(request_payload_builder).Encode(payload_data)
 	if encode_error != nil {
 		return *response_object, encode_error
 	}
-	body_payload := strings.NewReader(request_payload.String())
+	request_payload := strings.NewReader(request_payload_builder.String())
 
 	// actual request
-	response, error_ := http.DefaultClient.Post(PrepareURL(ENDPOINT_BATCH_VALIDATE, url.Values{}), "application/json", body_payload)
+	url_to_access, error_ := url.JoinPath(URI, ENDPOINT_BATCH_VALIDATE)
+	if error_ != nil {
+		return *response_object, fmt.Errorf("invalid URL (%s) or endpoint (%s) value", URI, ENDPOINT_BATCH_VALIDATE)
+	}
+	response, error_ := http.DefaultClient.Post(url_to_access, "application/json", request_payload)
 
 	// handle errors
 	if error_ != nil {
 		return *response_object, error_
 	}
 
-	// queue body closing
+	// queue body closing before accessing it
 	defer response.Body.Close()
-
 	if response.StatusCode != 200 {
-		response_body, error_ := io.ReadAll(response.Body)
-		if error_ != nil {
-			return *response_object, error_
-		} else {
-			return *response_object, errors.New(string(response_body))
-		}
+		return *response_object, ErrorFromResponse(response)
 	}
-	// 200OK response
 	json.NewDecoder(response.Body).Decode(response_object)
 	return *response_object, nil
 }

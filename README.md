@@ -60,6 +60,8 @@ In order to run the integration tests:
 - rename all "_integration_t.go" into "_integration_test.go"
 - run either individual or all tests (`go test .`)
 
+NOTE: currently, the unit tests can be updated such that, by removing the mocking and explicit API key setting, they should work as integration tests as well AS LONG AS a valid API key is provided via environment
+
 
 ## Already implemented
 - Validate single email

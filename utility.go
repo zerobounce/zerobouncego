@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
+
 	"github.com/joho/godotenv"
 )
 
@@ -91,6 +94,28 @@ func PrepareURL(endpoint string, params url.Values) string {
 	return fmt.Sprintf("%s/%s?%s", URI, endpoint, params.Encode())
 }
 
+func ErrorFromResponse(response *http.Response) error {
+	// ERROR handling: expect a json payload containing details about the error
+	var error_response map[string]string
+
+	response_body, error_ := io.ReadAll(response.Body)
+	if error_ != nil {
+		return errors.New("server error")
+	}
+	error_ = json.NewDecoder(strings.NewReader(string(response_body))).Decode(&error_response)
+	if error_ != nil {
+		// unexpected non-json payload
+		return errors.New(string(response_body))
+	}
+
+	// return all possible details about the error
+	var error_strings []string
+	for _, value := range error_response {
+		error_strings = append(error_strings, value)
+	}
+	return errors.New("error: " + strings.Join(error_strings, ", "))}
+
+
 // DoGetRequest does the request to the API
 func DoGetRequest(url string, object APIResponse) error {
 
@@ -100,13 +125,11 @@ func DoGetRequest(url string, object APIResponse) error {
 		return err
 	}
 
-	// Check if server response is not HTTP 200
-	if response.StatusCode != 200 {
-		return errors.New("server error")
-	}
-
 	// Close the request
 	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return ErrorFromResponse(response)
+	}
 
 	// Decode JSON Request
 	err = json.NewDecoder(response.Body).Decode(&object)

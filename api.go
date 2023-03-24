@@ -2,7 +2,9 @@ package zerobouncego
 
 import (
 	"net/url"
+	"strings"
 	"time"
+
 	"gopkg.in/guregu/null.v4"
 )
 
@@ -10,7 +12,7 @@ import (
 
 // CreditsResponse response of the credits balance
 type CreditsResponse struct {
-	Credits string `json:"Credits"`
+	Credits int `json:"Credits"`
 }
 
 // ValidateResponse Response from API
@@ -33,7 +35,11 @@ type ValidateResponse struct {
 	Region        null.String	`json:"region"`
 	City          null.String	`json:"city"`
 	Zipcode       null.String	`json:"zipcode"`
-	ProcessedAt   string      	`json:"processed_at"`
+	processedAtRaw string      	`json:"processed_at"`
+}
+
+func (v ValidateResponse)ProcessedAt() (time.Time, error) {
+	return time.Parse(time.DateTime, strings.Trim(v.processedAtRaw, `"`))
 }
 
 // IsValid checks if an email is valid
@@ -41,7 +47,7 @@ func (v *ValidateResponse) IsValid() bool {
 	return v.Status == "valid"
 }
 
-type GetApiUsageResponse struct {
+type ApiUsageResponse struct {
 	// Total number of times the API has been called
 	Total int `json:"total"`
 	// Total valid email addresses returned by the API
@@ -100,11 +106,20 @@ type GetApiUsageResponse struct {
 	SubStatusFailedSmtpConnection int `json:"sub_status_failed_smtp_connection"`
 	// Total number times the API has a sub status "mx_forward"
 	SubStatusMxForward int `json:"sub_status_mx_forward"`
-	// Start date of query. (format: yyyy/mm/dd)
-	StartDate string `json:"start_date"`
-	// End date of query. (format: yyyy/mm/dd)
-	EndDate string `json:"end_date"`
+	// Start date of query.
+	RawStartDate string `json:"start_date"`
+	// End date of query.
+	RawEndDate string `json:"end_date"`
 }
+
+func (v ApiUsageResponse)StartDate() (time.Time, error) {
+	return time.Parse("2/1/2006", strings.Trim(v.RawStartDate, `"`))
+}
+
+func (v ApiUsageResponse)EndDate() (time.Time, error) {
+	return time.Parse("2/1/2006", strings.Trim(v.RawEndDate, `"`))
+}
+
 
 // Validate validates a single email
 func Validate(email string, IPAddress string) (*ValidateResponse, error) {
@@ -130,8 +145,8 @@ func GetCredits() (*CreditsResponse, error) {
 }
 
 // GetApiUsage the usage of the API within a date interval
-func GetApiUsage(start_date, end_date time.Time) (*GetApiUsageResponse, error) {
-	response := &GetApiUsageResponse{}
+func GetApiUsage(start_date, end_date time.Time) (*ApiUsageResponse, error) {
+	response := &ApiUsageResponse{}
 	request_parameters := url.Values{}
 	request_parameters.Set("start_date", start_date.Format(time.DateOnly))
 	request_parameters.Set("end_date", end_date.Format(time.DateOnly))
