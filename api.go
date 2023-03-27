@@ -132,24 +132,38 @@ func Validate(email string, IPAddress string) (*ValidateResponse, error) {
 	response := &ValidateResponse{}
 
 	// Do the request
-	err := DoGetRequest(PrepareURL(ENDPOINT_VALIDATE, params), response)
-	return response, err
+	url_to_request, error_ := PrepareURL(ENDPOINT_API_USAGE, params)
+	if error_ != nil {
+		return response, error_
+	}
+	error_ = DoGetRequest(url_to_request, response)
+	return response, error_
 }
 
 // GetCredits gets credits balance
 func GetCredits() (*CreditsResponse, error) {
-
+	var error_ error
 	response := &CreditsResponse{}
-	err := DoGetRequest(PrepareURL(ENDPOINT_CREDITS, url.Values{}), response)
-	return response, err
+
+	url_to_request, error_ := PrepareURL(ENDPOINT_CREDITS, url.Values{})
+	if error_ != nil {
+		return response, error_
+	}
+	error_ = DoGetRequest(url_to_request, response)
+	return response, error_
 }
 
 // GetApiUsage the usage of the API within a date interval
 func GetApiUsage(start_date, end_date time.Time) (*ApiUsageResponse, error) {
+	var error_ error
 	response := &ApiUsageResponse{}
 	request_parameters := url.Values{}
 	request_parameters.Set("start_date", start_date.Format(time.DateOnly))
 	request_parameters.Set("end_date", end_date.Format(time.DateOnly))
-	err := DoGetRequest(PrepareURL(ENDPOINT_API_USAGE, request_parameters), response)
-	return response, err
+	url_to_request, error_ := PrepareURL(ENDPOINT_API_USAGE, request_parameters)
+	if error_ != nil {
+		return response, error_
+	}
+	error_ = DoGetRequest(url_to_request, response)
+	return response, error_
 }

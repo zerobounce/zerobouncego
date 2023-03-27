@@ -17,6 +17,7 @@ import (
 
 const (
 	URI                     = `https://api.zerobounce.net/v2/`
+	BULK_URI				= `https://bulkapi.zerobounce.net/v2/`
 	ENDPOINT_CREDITS        = "getcredits"
 	ENDPOINT_VALIDATE       = "validate"
 	ENDPOINT_API_USAGE      = "getapiusage"
@@ -69,6 +70,13 @@ const (
 // APIResponse basis for api responses
 type APIResponse interface{}
 
+// CsvFile - used for bulk validations that include csv files
+type CsvFile struct {
+	File         *os.File
+	HasHeaderRow bool
+	EmailAddressColumn int  // column index starts from 1
+}
+
 // FUNCTIONS
 
 var API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
@@ -87,13 +95,17 @@ func ImportApiKeyFromEnvFile() {
 }
 
 // PrepareURL prepares the URL
-func PrepareURL(endpoint string, params url.Values) string {
+func PrepareURL(endpoint string, params url.Values) (string, error) {
 
 	// Set API KEY
 	params.Set("api_key", API_KEY)
 
 	// Create a return the final URL
-	return fmt.Sprintf("%s/%s?%s", URI, endpoint, params.Encode())
+	final_url, error_ := url.JoinPath(URI, endpoint)
+	if error_ != nil {
+		return "", error_
+	}
+	return fmt.Sprintf("%s?%s", final_url, params.Encode()), nil
 }
 
 func ErrorFromResponse(response *http.Response) error {
