@@ -132,7 +132,7 @@ func Validate(email string, IPAddress string) (*ValidateResponse, error) {
 	response := &ValidateResponse{}
 
 	// Do the request
-	url_to_request, error_ := PrepareURL(ENDPOINT_API_USAGE, params)
+	url_to_request, error_ := PrepareURL(ENDPOINT_VALIDATE, params)
 	if error_ != nil {
 		return response, error_
 	}

@@ -121,8 +121,8 @@ func TestMockValidationOk(t *testing.T) {
 	for _, test_case := range emailsToValidate {
 		email_response, error_ := Validate(test_case.Email, SANDBOX_IP)
 		assert.Nil(t, error_)
-		assert.Equalf(t, email_response.Status, test_case.Status, "failed for email %s", email_response.Address)
-		assert.Equalf(t, email_response.SubStatus, test_case.SubStatus, "failed for email %s", email_response.Address)
+		assert.Equalf(t, test_case.Status, email_response.Status, "failed for email %s", email_response.Address)
+		assert.Equalf(t, test_case.SubStatus, email_response.SubStatus, "failed for email %s", email_response.Address)
 	}
 }
 
