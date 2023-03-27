@@ -47,29 +47,6 @@ func (b *BulkValidationFileStatusResponse)UploadDate() (time.Time, error) {
 }
 
 
-// ImportCsvFile - import a file to be uploaded for validation
-func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*CsvFile, error) {
-	var error_ error
-	_, error_ = os.Stat(path_to_file)
-	if error_ != nil {
-		return nil, error_
-	}
-	file, error_ := os.Open(path_to_file)
-	if error_ != nil {
-		return nil, error_
-	}
-
-	// server interprets columns indexing from 1
-	if email_column == 0 {
-		email_column = 1
-	}
-	csv_file := &CsvFile{
-		File: file, HasHeaderRow: has_header, EmailAddressColumn: email_column,
-	}
-	return csv_file, nil
-}
-
-
 // handleErrorPayload - generate error based on an error payload with expected
 // response payload: {"success": false, "message": ...}
 func handleErrorPayload(response *http.Response) error {
