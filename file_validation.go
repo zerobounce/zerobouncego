@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -70,9 +69,21 @@ func BulkValidate(csv_file CsvFile, remove_duplicate bool) (*BulkValidationRespo
 	var form_writer io.Writer
 
 	// MULTI-PART FORM PREPARATION 
-	defer csv_file.File.Close()
 	multipart_writer := multipart.NewWriter(&bytes_buffer)
-	form_writer, error_ = multipart_writer.CreateFormFile("file", csv_file.File.Name())
+
+	// add the fields FIRST
+	multipart_writer.WriteField("api_key", API_KEY)
+	multipart_writer.WriteField("has_header_row", fmt.Sprintf("%v", csv_file.HasHeaderRow))
+	multipart_writer.WriteField("remove_duplicate", fmt.Sprintf("%v", remove_duplicate))
+
+	// add column-related fields
+	columns_mapping := csv_file.ColumnsMapping()
+	for column_key := range columns_mapping {
+		multipart_writer.WriteField(column_key, fmt.Sprintf("%d", columns_mapping[column_key]))
+	}
+
+	// add the file AFTERWARDS
+	form_writer, error_ = multipart_writer.CreateFormFile("file", csv_file.FileName)
 	if error_ != nil {
 		return nil, error_
 	}
@@ -83,12 +94,6 @@ func BulkValidate(csv_file CsvFile, remove_duplicate bool) (*BulkValidationRespo
 	if error_ != nil {
 		return nil, error_
 	}
-
-	// add the other fields
-	multipart_writer.WriteField("api_key", API_KEY)
-	multipart_writer.WriteField("has_header_row", fmt.Sprintf("%v", csv_file.HasHeaderRow))
-	multipart_writer.WriteField("email_address_column", fmt.Sprintf("%d", csv_file.EmailAddressColumn))
-	multipart_writer.WriteField("remove_duplicate", fmt.Sprintf("%v", remove_duplicate))
 
 	// THE ACTUAL REQUEST 
 	endpoint, error_ := url.JoinPath(BULK_URI, ENDPOINT_FILE_SEND)
@@ -120,7 +125,7 @@ func BulkValidate(csv_file CsvFile, remove_duplicate bool) (*BulkValidationRespo
 		return nil, payload_error
 	}
 
-	// 200 OK
+	// 201 OK
 	response_object := &BulkValidationResponse{}
 	error_ = json.NewDecoder(response_http.Body).Decode(response_object)
 	if error_ != nil {
@@ -168,12 +173,8 @@ func BulkValidationFileStatus(file_id string) (*BulkValidationFileStatusResponse
 
 
 // BulkValidationResult - save a csv containing the results of the file with the given file ID
-func BulkValidationResult(file_id string, path_to_save_result_file string) error {
+func BulkValidationResult(file_id string, file_writer io.WriteCloser) error {
 	var error_ error
-	_, error_ = os.Stat(path_to_save_result_file)
-	if error_ != nil {
-		return error_
-	}
 
 	// make request
 	params := url.Values{}
@@ -205,17 +206,14 @@ func BulkValidationResult(file_id string, path_to_save_result_file string) error
 	}
 
 	// save to file
-	file, error_ := os.Create(path_to_save_result_file)
-	if error_ != nil {
-		return errors.Join(errors.New("error creating file to store result"), error_)
-	}
-
 	response_contents, error_ := io.ReadAll(response_http.Request.Body)
 	if error_ != nil {
 		return errors.Join(errors.New("could not read response body"), error_)
 	}
 
-	_, error_ = file.Write(response_contents)
+	defer file_writer.Close()
+	file_writer.Write(response_contents)
+	_, error_ = file_writer.Write(response_contents)
 	if error_ != nil {
 		return errors.Join(errors.New("could not write into given file"), error_)
 	}

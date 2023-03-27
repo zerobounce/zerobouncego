@@ -72,9 +72,41 @@ type APIResponse interface{}
 
 // CsvFile - used for bulk validations that include csv files
 type CsvFile struct {
-	File         *os.File
-	HasHeaderRow bool
-	EmailAddressColumn int  // column index starts from 1
+	File				io.Reader	`json:"file"`
+	FileName			string		`json:"file_name"`
+	HasHeaderRow		bool		`json:"has_header_row"`
+	
+	// column index starts from 1
+	// if either of the following will be 0, will be excluded from the request
+	EmailAddressColumn 	int			`json:"email_address_column"`
+	FirstNameColumn		int			`json:"first_name_column"`
+	LastNameColumn		int			`json:"last_name_column"`
+	GenderColumn		int			`json:"gender_column"`
+	IpAddressColumn		int			`json:"ip_address_column"`
+}
+
+// ColumnsMapping - function generating how columns-index mapping of the instance
+func (c *CsvFile)ColumnsMapping() map[string]int {
+	column_to_value := make(map[string]int) 
+
+	// include this field regardless, as it's required
+	column_to_value["email_address_column"] = c.EmailAddressColumn
+
+	// populate optional values
+	if c.FirstNameColumn != 0 {
+		column_to_value["first_name_column"] = c.FirstNameColumn
+	}
+	if c.LastNameColumn != 0 {
+		column_to_value["last_name_column"] = c.LastNameColumn
+	}
+	if c.GenderColumn != 0 {
+		column_to_value["gender_column"] = c.GenderColumn
+	}
+	if c.IpAddressColumn != 0 {
+		column_to_value["ip_address_column"] = c.IpAddressColumn
+	}
+
+	return column_to_value
 }
 
 // FUNCTIONS
@@ -111,8 +143,9 @@ func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*Csv
 	if email_column == 0 {
 		email_column = 1
 	}
+
 	csv_file := &CsvFile{
-		File: file, HasHeaderRow: has_header, EmailAddressColumn: email_column,
+		File: file, FileName: file.Name(), HasHeaderRow: has_header, EmailAddressColumn: email_column,
 	}
 	return csv_file, nil
 }
