@@ -8,25 +8,28 @@ import (
 	"strings"
 )
 
-// REQUEST related structures
-
+// EmailToValidate represents one unit send to the batch validate endpoint
 type EmailToValidate struct {
-	EmailAddress string `json:"email_address" default:""`
+	EmailAddress string `json:"email_address"`
 	IPAddress    string `json:"ip_address"`
 }
 
-// RESPONSE related structures
-
+// EmailBatchError an error unit received in the response, that can be associated
+// with an email sent to the batch validate endpoint
 type EmailBatchError struct {
 	Error        string `json:"error"`
 	EmailAddress string `json:"email_address"`
 }
 
+// ValidateBatchResponse represents the structure of a 200OK batch validate
+// response
 type ValidateBatchResponse struct {
 	EmailBatch []ValidateResponse	`json:"email_batch"`
 	Errors     []EmailBatchError	`json:"errors"`
 }
 
+// ValidateBatch given a list of emails (and, optionally, their IPs), validate
+// them and return both validation details and errors about the emails sent
 func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error) {
 	response_object := &ValidateBatchResponse{}
 	var error_ error

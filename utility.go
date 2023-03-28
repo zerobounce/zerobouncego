@@ -66,25 +66,31 @@ const (
 // APIResponse basis for api responses
 type APIResponse interface{}
 
-// FUNCTIONS
-
+// API_KEY the API key used in order to make the requests
 var API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
 
+// FUNCTIONS
+
+// SetApiKey set the API key explicitly
 func SetApiKey(new_api_key_value string) {
 	API_KEY = new_api_key_value
 }
 
-func ImportApiKeyFromEnvFile() {
+// ImportApiKeyFromEnvFile provided that a .env file can be found where the
+// program is running, load it, extract the API key and set it
+func ImportApiKeyFromEnvFile() bool {
 	error_ := godotenv.Load(".env") 
 	if error_ != nil {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
-		return
+		return false
 	}
 	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
+	return true
 }
 
 
-// PrepareURL prepares the URL
+// PrepareURL prepares the URL for a get request by attaching both the API
+// key and the given params
 func PrepareURL(endpoint string, params url.Values) string {
 
 	// Set API KEY
@@ -94,6 +100,11 @@ func PrepareURL(endpoint string, params url.Values) string {
 	return fmt.Sprintf("%s/%s?%s", URI, endpoint, params.Encode())
 }
 
+
+// ErrorFromResponse given a response who is expected to have a json structure,
+// generate a joined response of all values within that json
+// This function was done because error messages have inconsistent keys
+// eg: error, message, Message etc
 func ErrorFromResponse(response *http.Response) error {
 	// ERROR handling: expect a json payload containing details about the error
 	var error_response map[string]string
@@ -116,7 +127,7 @@ func ErrorFromResponse(response *http.Response) error {
 	return errors.New("error: " + strings.Join(error_strings, ", "))}
 
 
-// DoGetRequest does the request to the API
+// DoGetRequest does a GET request to the API
 func DoGetRequest(url string, object APIResponse) error {
 
 	// Do the request
@@ -167,6 +178,7 @@ var emailsToValidate = []SingleTest{
 	{Email: "leading_period_removed@example.com", Status: "valid", SubStatus: "leading_period_removed"},
 	{Email: "mail_server_did_not_respond@example.com", Status: "unknown", SubStatus: "mail_server_did_not_respond"},
 	{Email: "mail_server_temporary_error@example.com", Status: "unknown", SubStatus: "mail_server_temporary_error"},
+	{Email: "unknown@example.com", Status: "unknown", SubStatus: "mail_server_temporary_error"},
 	{Email: "mailbox_quota_exceeded@example.com", Status: "invalid", SubStatus: "mailbox_quota_exceeded"},
 	{Email: "mailbox_not_found@example.com", Status: "invalid", SubStatus: "mailbox_not_found"},
 	{Email: "no_dns_entries@example.com", Status: "invalid", SubStatus: "no_dns_entries"},

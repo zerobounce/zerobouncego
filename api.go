@@ -8,14 +8,12 @@ import (
 	"gopkg.in/guregu/null.v4"
 )
 
-// URI URL for the requests
-
 // CreditsResponse response of the credits balance
 type CreditsResponse struct {
 	Credits int `json:"Credits"`
 }
 
-// ValidateResponse Response from API
+// ValidateResponse response structure for single email validation
 type ValidateResponse struct {
 	Address       string		`json:"address"`
 	Status        string		`json:"status"`
@@ -47,6 +45,7 @@ func (v *ValidateResponse) IsValid() bool {
 	return v.Status == "valid"
 }
 
+// ApiUsageResponse response structure for the API usage functionality
 type ApiUsageResponse struct {
 	// Total number of times the API has been called
 	Total int `json:"total"`
@@ -112,10 +111,12 @@ type ApiUsageResponse struct {
 	RawEndDate string `json:"end_date"`
 }
 
+// StartDate provide the parsed start date of an API usage response
 func (v ApiUsageResponse)StartDate() (time.Time, error) {
 	return time.Parse("2/1/2006", strings.Trim(v.RawStartDate, `"`))
 }
 
+// StartDate provide the parsed end date of an API usage response
 func (v ApiUsageResponse)EndDate() (time.Time, error) {
 	return time.Parse("2/1/2006", strings.Trim(v.RawEndDate, `"`))
 }

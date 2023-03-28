@@ -14,9 +14,9 @@ import (
 )
 
 
-
+// mockValidateRequest mock responses of GET/validate
 func mockValidateRequest() {
-	httpmock.RegisterResponder("GET", `=~^(.*)`+ENDPOINT_VALIDATE+`(.*)\z`,
+	httpmock.RegisterResponder("GET", `=~^(.*)` + ENDPOINT_VALIDATE + `(.*)\z`,
 		func(req *http.Request) (*http.Response, error) {
 			request_query := req.URL.Query()
 			if request_query.Get("api_key") == "" {
@@ -35,13 +35,14 @@ func mockValidateRequest() {
 	)
 }
 
-func mockValidateBulkRequest() {
+// mockBatchValidateRequest mock responses of GET/validatebatch
+func mockBatchValidateRequest() {
 	type BatchValidateRequestPayload struct {
 		ApiKey string            `json:"api_key"`
 		Emails *[]EmailToValidate `json:"email_batch"`
 	}
 
-	httpmock.RegisterResponder("POST", `=~^(.*)`+ENDPOINT_BATCH_VALIDATE+`(.*)\z`,
+	httpmock.RegisterResponder("POST", `=~^(.*)` + ENDPOINT_BATCH_VALIDATE + `(.*)\z`,
 		func(req *http.Request) (*http.Response, error) {
 			var error_ error
 			var email_responses []string
@@ -130,7 +131,7 @@ func TestMockBulkValidationNoApiKey(t *testing.T) {
 	SetApiKey("")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
-	mockValidateBulkRequest()
+	mockBatchValidateRequest()
 
 	bulk_response, error_ := ValidateBatch(EmailsToValidate())
 	if error_ != nil {
@@ -147,7 +148,7 @@ func TestMockBulkValidationNoEmails(t *testing.T){
 	SetApiKey("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
-	mockValidateBulkRequest()
+	mockBatchValidateRequest()
 
 	_, error_ := ValidateBatch([]EmailToValidate{})
 	assert.NotNil(t, error_)
@@ -157,7 +158,7 @@ func TestMockBulkValidationValidAndErroneousMail(t *testing.T) {
 	SetApiKey("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
-	mockValidateBulkRequest()
+	mockBatchValidateRequest()
 
 	response, error_ := ValidateBatch([]EmailToValidate{
 		{EmailAddress: "valid@example.com"}, {},
@@ -172,7 +173,7 @@ func TestMockBulkValidationOk(t *testing.T) {
 	SetApiKey("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
-	mockValidateBulkRequest()
+	mockBatchValidateRequest()
 
 	emails_to_validate := EmailsToValidate()
 	response, error_ := ValidateBatch(emails_to_validate)
