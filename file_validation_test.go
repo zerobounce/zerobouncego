@@ -23,7 +23,7 @@ const (
 	file_name_400          = "filename_400.csv"
 	send_file_response_400 = `{
 		"success": false,
-		"error_message": "` + sample_error_message +`",
+		"error_message": "` + sample_error_message + `",
 		"message": "` + sample_error_message + `"
 	}`
 	file_name_200          = "filename_200.csv"
@@ -58,7 +58,6 @@ func handleMockedBulkValidate(request *http.Request) (*http.Response, error) {
 	return nil, errors.New("case not covered")
 }
 
-
 // TestEnsureParametersArePassedToRequest - ensure that a configured `CsvFile`
 // instance has all its parameters passed to the request
 func TestAllParametersArePassedToRequest(t *testing.T) {
@@ -72,15 +71,15 @@ func TestAllParametersArePassedToRequest(t *testing.T) {
 		HasHeaderRow:       true,
 		EmailAddressColumn: 1,
 		FirstNameColumn:    2,
-		LastNameColumn:		3,
-		GenderColumn:		4,
-		IpAddressColumn:	5,
+		LastNameColumn:     3,
+		GenderColumn:       4,
+		IpAddressColumn:    5,
 	}
 
 	// mock the function also does the validation
 	httpmock.RegisterResponder(
 		"POST",
-		`=~^(.*)` + ENDPOINT_FILE_SEND + `(.*)\z`,
+		`=~^(.*)`+ENDPOINT_FILE_SEND+`(.*)\z`,
 		func(request *http.Request) (*http.Response, error) {
 			var error_ error
 			error_ = request.ParseMultipartForm(100_000_000)
@@ -138,7 +137,7 @@ func TestAllParametersArePassedToRequest(t *testing.T) {
 	)
 
 	// making the request
-	response_object, error_ := BulkValidate(csv_file, false)
+	response_object, error_ := BulkValidationSubmit(csv_file, false)
 	assert.Nil(t, error_)
 	assert.NotNil(t, response_object)
 }
@@ -158,7 +157,7 @@ func TestSomeParametersArePassedToRequest(t *testing.T) {
 	// mock the function also does the validation
 	httpmock.RegisterResponder(
 		"POST",
-		`=~^(.*)` + ENDPOINT_FILE_SEND + `(.*)\z`,
+		`=~^(.*)`+ENDPOINT_FILE_SEND+`(.*)\z`,
 		func(request *http.Request) (*http.Response, error) {
 			var error_ error
 			error_ = request.ParseMultipartForm(100_000_000)
@@ -216,7 +215,7 @@ func TestSomeParametersArePassedToRequest(t *testing.T) {
 	)
 
 	// making the request
-	response_object, error_ := BulkValidate(csv_file, false)
+	response_object, error_ := BulkValidationSubmit(csv_file, false)
 	assert.Nil(t, error_)
 	assert.NotNil(t, response_object)
 }
@@ -227,7 +226,7 @@ func TestBulkValidate400Error(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
 		"POST",
-		`=~^(.*)` + ENDPOINT_FILE_SEND + `(.*)\z`,
+		`=~^(.*)`+ENDPOINT_FILE_SEND+`(.*)\z`,
 		handleMockedBulkValidate,
 	)
 
@@ -238,9 +237,11 @@ func TestBulkValidate400Error(t *testing.T) {
 		HasHeaderRow:       true,
 		EmailAddressColumn: 1,
 	}
-	response, error_ := BulkValidate(csv_file, false)
+	response, error_ := BulkValidationSubmit(csv_file, false)
 	assert.Nil(t, response)
-	if !assert.NotNil(t, error_) { t.FailNow() }
+	if !assert.NotNil(t, error_) {
+		t.FailNow()
+	}
 	assert.Contains(t, error_.Error(), sample_error_message)
 }
 
@@ -250,7 +251,7 @@ func TestBulkValidate200OK(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
 		"POST",
-		`=~^(.*)` + ENDPOINT_FILE_SEND + `(.*)\z`,
+		`=~^(.*)`+ENDPOINT_FILE_SEND+`(.*)\z`,
 		handleMockedBulkValidate,
 	)
 
@@ -260,9 +261,13 @@ func TestBulkValidate200OK(t *testing.T) {
 		HasHeaderRow:       true,
 		EmailAddressColumn: 1,
 	}
-	validate_object, error_ := BulkValidate(csv_file, false)
-	if !assert.Nil(t, error_) { t.FailNow() }
-	if !assert.NotNil(t, validate_object) { t.FailNow() }
+	validate_object, error_ := BulkValidationSubmit(csv_file, false)
+	if !assert.Nil(t, error_) {
+		t.FailNow()
+	}
+	if !assert.NotNil(t, validate_object) {
+		t.FailNow()
+	}
 
 	assert.Equal(t, validate_object.Success, true)
 	assert.Equal(t, validate_object.FileName, file_name_200)
