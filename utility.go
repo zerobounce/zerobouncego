@@ -17,16 +17,20 @@ import (
 
 const (
 	URI                     = `https://api.zerobounce.net/v2/`
-	BULK_URI				= `https://bulkapi.zerobounce.net/v2/`
-	ENDPOINT_CREDITS        = "getcredits"
-	ENDPOINT_ACTIVITY_DATA	= "activity"
-	ENDPOINT_VALIDATE       = "validate"
-	ENDPOINT_API_USAGE      = "getapiusage"
-	ENDPOINT_BATCH_VALIDATE = "validatebatch"
-	ENDPOINT_FILE_SEND      = "sendfile"
-	ENDPOINT_FILE_STATUS    = "filestatus"
-	ENDPOINT_FILE_GET       = "getfile" // Content-type: application/octet-stream
-	ENDPOINT_FILE_DELETE    = "deletefile"
+	BULK_URI                = `https://bulkapi.zerobounce.net/v2/`
+	ENDPOINT_CREDITS        = "/getcredits"
+	ENDPOINT_ACTIVITY_DATA  = "/activity"
+	ENDPOINT_VALIDATE       = "/validate"
+	ENDPOINT_API_USAGE      = "/getapiusage"
+	ENDPOINT_BATCH_VALIDATE = "/validatebatch"
+	ENDPOINT_FILE_SEND      = "/sendfile"
+	ENDPOINT_FILE_STATUS    = "/filestatus"
+	ENDPOINT_FILE_RESULT    = "/getfile" // Content-type: application/octet-stream
+	ENDPOINT_FILE_DELETE    = "/deletefile"
+	ENDPOINT_SCORING_SEND   = "/scoring/sendfile"
+	ENDPOINT_SCORING_STATUS = "/scoring/filestatus"
+	ENDPOINT_SCORING_RESULT	= "/scoring/getfile" // Content-type: application/octet-stream
+	ENDPOINT_SCORING_DELETE = "/scoring/deletefile"
 	SANDBOX_IP              = "99.110.204.1"
 )
 
@@ -73,22 +77,22 @@ type APIResponse interface{}
 
 // CsvFile - used for bulk validations that include csv files
 type CsvFile struct {
-	File				io.Reader	`json:"file"`
-	FileName			string		`json:"file_name"`
-	HasHeaderRow		bool		`json:"has_header_row"`
-	
+	File         io.Reader `json:"file"`
+	FileName     string    `json:"file_name"`
+	HasHeaderRow bool      `json:"has_header_row"`
+
 	// column index starts from 1
 	// if either of the following will be 0, will be excluded from the request
-	EmailAddressColumn 	int			`json:"email_address_column"`
-	FirstNameColumn		int			`json:"first_name_column"`
-	LastNameColumn		int			`json:"last_name_column"`
-	GenderColumn		int			`json:"gender_column"`
-	IpAddressColumn		int			`json:"ip_address_column"`
+	EmailAddressColumn int `json:"email_address_column"`
+	FirstNameColumn    int `json:"first_name_column"`
+	LastNameColumn     int `json:"last_name_column"`
+	GenderColumn       int `json:"gender_column"`
+	IpAddressColumn    int `json:"ip_address_column"`
 }
 
 // ColumnsMapping - function generating how columns-index mapping of the instance
-func (c *CsvFile)ColumnsMapping() map[string]int {
-	column_to_value := make(map[string]int) 
+func (c *CsvFile) ColumnsMapping() map[string]int {
+	column_to_value := make(map[string]int)
 
 	// include this field regardless, as it's required
 	column_to_value["email_address_column"] = c.EmailAddressColumn
@@ -123,7 +127,7 @@ func SetApiKey(new_api_key_value string) {
 // ImportApiKeyFromEnvFile provided that a .env file can be found where the
 // program is running, load it, extract the API key and set it
 func ImportApiKeyFromEnvFile() bool {
-	error_ := godotenv.Load(".env") 
+	error_ := godotenv.Load(".env")
 	if error_ != nil {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
 		return false
@@ -131,7 +135,6 @@ func ImportApiKeyFromEnvFile() bool {
 	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
 	return true
 }
-
 
 // ImportCsvFile - import a file to be uploaded for validation
 func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*CsvFile, error) {
@@ -170,7 +173,6 @@ func PrepareURL(endpoint string, params url.Values) (string, error) {
 	}
 	return fmt.Sprintf("%s?%s", final_url, params.Encode()), nil
 }
-
 
 // ErrorFromResponse given a response who is expected to have a json structure,
 // generate a joined response of all values within that json
@@ -225,7 +227,6 @@ type SingleTest struct {
 	SubStatus string
 	FreeEmail bool
 }
-
 
 var emailsToValidate = []SingleTest{
 	{Email: "disposable@example.com", Status: "do_not_mail", SubStatus: "disposable"},

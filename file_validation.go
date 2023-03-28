@@ -24,33 +24,31 @@ type BulkValidationResponse struct {
 
 // BulkValidationFileStatus - response payload after a file status check
 type BulkValidationFileStatusResponse struct {
-	Success				bool	`json:"success"`
-	FileId				string	`json:"file_id"`
-	FileName			string	`json:"file_name"`
-	UploadDateRaw		string	`json:"upload_date"`
-	FileStatus			string	`json:"file_status"`
-	CompletePercentage	string	`json:"complete_percentage"`
-	ReturnUrl			string	`json:"return_url"`
+	Success            bool   `json:"success"`
+	FileId             string `json:"file_id"`
+	FileName           string `json:"file_name"`
+	UploadDateRaw      string `json:"upload_date"`
+	FileStatus         string `json:"file_status"`
+	CompletePercentage string `json:"complete_percentage"`
+	ReturnUrl          string `json:"return_url"`
 }
 
 // Percentage - provide the percentage, from a response payload, as a float
-func (b *BulkValidationFileStatusResponse)Percentage() (float64, error) {
+func (b *BulkValidationFileStatusResponse) Percentage() (float64, error) {
 	float_string := strings.ReplaceAll(b.CompletePercentage, "%", "")
 	return strconv.ParseFloat(float_string, 64)
 }
 
-
 // UploadDate - provide the upload date, from a response payload, as a time.Time
-func (b *BulkValidationFileStatusResponse)UploadDate() (time.Time, error) {
+func (b *BulkValidationFileStatusResponse) UploadDate() (time.Time, error) {
 	return time.Parse(time.RFC3339, b.UploadDateRaw)
 }
-
 
 // handleErrorPayload - generate error based on an error payload with expected
 // response payload: {"success": false, "message": ...}
 func handleErrorPayload(response *http.Response) error {
 	var error_ error
-	var response_payload map[string]interface{}  // expected keys: success, message
+	var response_payload map[string]interface{} // expected keys: success, message
 	defer response.Body.Close()
 
 	error_ = json.NewDecoder(response.Body).Decode(&response_payload)
@@ -68,7 +66,7 @@ func BulkValidate(csv_file CsvFile, remove_duplicate bool) (*BulkValidationRespo
 	var error_ error
 	var form_writer io.Writer
 
-	// MULTI-PART FORM PREPARATION 
+	// MULTI-PART FORM PREPARATION
 	multipart_writer := multipart.NewWriter(&bytes_buffer)
 
 	// add the fields FIRST
@@ -95,7 +93,7 @@ func BulkValidate(csv_file CsvFile, remove_duplicate bool) (*BulkValidationRespo
 		return nil, error_
 	}
 
-	// THE ACTUAL REQUEST 
+	// THE ACTUAL REQUEST
 	endpoint, error_ := url.JoinPath(BULK_URI, ENDPOINT_FILE_SEND)
 	if error_ != nil {
 		return nil, error_
@@ -134,7 +132,6 @@ func BulkValidate(csv_file CsvFile, remove_duplicate bool) (*BulkValidationRespo
 	return response_object, nil
 }
 
-
 // BulkValidationFileStatus - check the percentage of completion of a file uploaded
 // for bulk validation
 func BulkValidationFileStatus(file_id string) (*BulkValidationFileStatusResponse, error) {
@@ -171,7 +168,6 @@ func BulkValidationFileStatus(file_id string) (*BulkValidationFileStatusResponse
 	return response_object, nil
 }
 
-
 // BulkValidationResult - save a csv containing the results of the file with the given file ID
 func BulkValidationResult(file_id string, file_writer io.WriteCloser) error {
 	var error_ error
@@ -180,7 +176,7 @@ func BulkValidationResult(file_id string, file_writer io.WriteCloser) error {
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", file_id)
-	url_to_request, error_ := url.JoinPath(BULK_URI, ENDPOINT_FILE_GET)
+	url_to_request, error_ := url.JoinPath(BULK_URI, ENDPOINT_FILE_RESULT)
 	if error_ != nil {
 		return error_
 	}
@@ -220,7 +216,6 @@ func BulkValidationResult(file_id string, file_writer io.WriteCloser) error {
 	return nil
 }
 
-
 // BulkValidationDeleteFile - cancel the validation process for a given file ID
 func BulkValidationDeleteFile(file_id string) error {
 	params := url.Values{}
@@ -242,4 +237,3 @@ func BulkValidationDeleteFile(file_id string) error {
 	}
 	return nil
 }
-
