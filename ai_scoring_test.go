@@ -4,7 +4,10 @@ package zerobouncego
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -94,6 +97,73 @@ func testingCsvFileOk() CsvFile {
 		HasHeaderRow:       true,
 		EmailAddressColumn: 1,
 	}
+}
+
+// TestScoringSubmitEnsureParametersSubmit - ensure that a configured `CsvFile`
+// instance has all its parameters passed to the request
+func TestScoringSubmitEnsureParametersSubmit(t *testing.T) {
+	SetApiKey("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	csv_file := testingCsvFileOk()
+
+	// mock the function also does the validation
+	httpmock.RegisterResponder(
+		"POST",
+		`=~^(.*)`+ENDPOINT_SCORING_SEND+`(.*)\z`,
+		func(request *http.Request) (*http.Response, error) {
+			var error_ error
+			error_ = request.ParseMultipartForm(100_000_000)
+			if error_ != nil {
+				return nil, error_
+			}
+
+			// following conversion is valid as both url.Values and multipart.Form.Value
+			// are type aliases for `map[string][]string`
+			var form_values url.Values = request.MultipartForm.Value
+
+			// ensure expected fields exist
+			expected_fields := []string{
+				"has_header_row",
+				"email_address_column",
+			}
+			for _, field := range expected_fields {
+				assert.Truef(t, form_values.Has(field), field)
+			}
+
+			// ensure fields have expected values
+			assert.Equal(t, API_KEY, form_values.Get("api_key"))
+			assert.Equal(t, fmt.Sprintf("%v", csv_file.HasHeaderRow), form_values.Get("has_header_row"))
+			assert.Equal(t, fmt.Sprintf("%d", csv_file.EmailAddressColumn), form_values.Get("email_address_column"))
+
+			// ensure file was properly sent
+			file_header_list := request.MultipartForm.File["file"]
+			if len(file_header_list) == 0 {
+				return nil, errors.New("file contents not found")
+			}
+			file_header := file_header_list[0]
+			assert.Equal(t, csv_file.FileName, file_header.Filename)
+			file_descriptor, error_ := file_header.Open()
+			if error_ != nil {
+				return nil, error_
+			}
+
+			defer file_descriptor.Close()
+			file_contents, error_ := io.ReadAll(file_descriptor)
+			if error_ != nil {
+				return nil, error_
+			}
+			assert.Equal(t, sample_file_contents, string(file_contents))
+
+			return httpmock.NewStringResponse(201, send_file_response_200), nil
+		},
+	)
+
+	// making the request
+	response_object, error_ := AiScoringFileSubmit(csv_file, false)
+	assert.Nil(t, error_)
+	assert.NotNil(t, response_object)
 }
 
 // TestScoringSubmitLibraryError - error returned by http library
