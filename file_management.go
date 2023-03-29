@@ -78,14 +78,19 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer) e
 	// add the file AFTERWARDS
 	form_writer, error_ = multipart_writer.CreateFormFile("file", csv_file.FileName)
 	if error_ != nil {
-		return error_
+		return errors.Join(errors.New("error creating multipart form"), error_)
 	}
 
 	// add file in form-data and add terminating boundary
-	io.Copy(form_writer, csv_file.File)
+	contents, error_ := io.ReadAll(csv_file.File)
+	if error_ != nil {
+		return errors.Join(errors.New("error reading from csv file"), error_)
+	}
+
+	form_writer.Write(contents)
 	error_ = multipart_writer.Close()
 	if error_ != nil {
-		return error_
+		return errors.Join(errors.New("error populating multiform with file"), error_)
 	}
 	return nil
 }
