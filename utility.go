@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/joho/godotenv"
 )
 
@@ -201,8 +202,12 @@ var emailsToValidate = []SingleTest{
 
 // variables used for file-related unit tests
 const (
-	sample_file_contents   = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
-	sample_error_message   = "error message"
+	sample_date_time = "2023-01-12T13:00:00Z"
+	sample_file_contents = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
+	sample_error_message = "error message"
+	sample_error_400     = `{
+		"error": "` + sample_error_message + `"
+	}`
 	file_name_400          = "filename_400.csv"
 	send_file_response_400 = `{
 		"success": false,
@@ -219,3 +224,42 @@ const (
 		"file_id": "` + testing_file_id + `"
 	}`
 )
+
+// mockErrorResponse - mock http library to return error for given endpoint
+func mockErrorResponse(method, endpoint string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		// httpmock.NewErrorResponder(errors.New(sample_error_message)),
+		func(r *http.Request) (*http.Response, error) { return nil, errors.New(sample_error_message) },
+	)
+}
+
+// mockBadRequestResponse - mock http library to return 400 response for given endpoint
+func mockBadRequestResponse(method, endpoint string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		httpmock.NewStringResponder(400, sample_error_400),
+	)
+}
+
+// mockBadRequestResponse - mock http library to return 200Ok response for given endpoint
+// returning given endpoint
+func mockOkResponse(method, endpoint, content string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		httpmock.NewStringResponder(200, content),
+	)
+}
+
+// testingCsvFileOk - sample csv file, used in testing
+func testingCsvFileOk() CsvFile {
+	return CsvFile{
+		File:               strings.NewReader(sample_file_contents),
+		FileName:           file_name_200,
+		HasHeaderRow:       true,
+		EmailAddressColumn: 1,
+	}
+}
