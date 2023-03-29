@@ -17,32 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	sample_file_contents   = "valid@example.com\ninvalid@example.com\n"
-	sample_error_message   = "error message"
-	file_name_400          = "filename_400.csv"
-	send_file_response_400 = `{
-		"success": false,
-		"error_message": "` + sample_error_message + `",
-		"message": "` + sample_error_message + `"
-	}`
-	file_name_200          = "filename_200.csv"
-	file_id                = "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
-	send_file_response_200 = `
-	{
-		"success": true,
-		"message": "File Accepted",
-		"file_name": "` + file_name_200 + `",
-		"file_id": "` + file_id + `"
-	}`
-)
 
-const _ = `
-Test cases:
-- response 400
-- response 200
-`
-
+// handleMockedBulkValidate - simple file-to-response mock
 func handleMockedBulkValidate(request *http.Request) (*http.Response, error) {
 	_, file_header, error_ := request.FormFile("file")
 	if error_ != nil {
@@ -271,5 +247,5 @@ func TestBulkValidate200OK(t *testing.T) {
 
 	assert.Equal(t, validate_object.Success, true)
 	assert.Equal(t, validate_object.FileName, file_name_200)
-	assert.Equal(t, validate_object.FileId, file_id)
+	assert.Equal(t, validate_object.FileId, testing_file_id)
 }
