@@ -63,7 +63,7 @@ func (c *CsvFile) ColumnsMapping() map[string]int {
 // current `CsvFile` instance
 func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer) error {
 	var error_ error
-	var form_writer io.Writer
+	var file_form_writer io.Writer
 
 	// add the fields FIRST
 	multipart_writer.WriteField("api_key", API_KEY)
@@ -76,7 +76,7 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer) e
 	}
 
 	// add the file AFTERWARDS
-	form_writer, error_ = multipart_writer.CreateFormFile("file", csv_file.FileName)
+	file_form_writer, error_ = multipart_writer.CreateFormFile("file", csv_file.FileName)
 	if error_ != nil {
 		return errors.Join(errors.New("error creating multipart form"), error_)
 	}
@@ -87,7 +87,7 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer) e
 		return errors.Join(errors.New("error reading from csv file"), error_)
 	}
 
-	form_writer.Write(contents)
+	file_form_writer.Write(contents)
 	error_ = multipart_writer.Close()
 	if error_ != nil {
 		return errors.Join(errors.New("error populating multiform with file"), error_)
