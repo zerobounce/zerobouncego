@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+const (
+	CONTENT_TYPE_OCTET_STREAM = "application/octet-stream"
+	CONTENT_TYPE_JSON         = "application/json"
+)
+
 // CsvFile - used for bulk validations and AI scoring
 type CsvFile struct {
 	File         io.Reader `json:"file"`
@@ -105,9 +110,17 @@ type FileStatusResponse struct {
 }
 
 // Percentage - provide the percentage, from a response payload, as a float
-func (b *FileStatusResponse) Percentage() (float64, error) {
-	float_string := strings.ReplaceAll(b.CompletePercentage, "%", "")
-	return strconv.ParseFloat(float_string, 64)
+func (b *FileStatusResponse) Percentage() float64 {
+	// expected structures: "10%", "10% Completed."
+	parts := strings.Split(b.CompletePercentage, "%")
+	if len(parts) == 0 {
+		return -1
+	}
+	parsed_float, error_ := strconv.ParseFloat(parts[0], 64)
+	if error_ != nil {
+		return -1
+	}
+	return parsed_float
 }
 
 // UploadDate - provide the upload date, from a response payload, as a time.Time
@@ -153,7 +166,6 @@ func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*Csv
 	}
 	return csv_file, nil
 }
-
 
 // GenericFileSubmit - submits a csv file to an operation represented by the given endpoint
 func GenericFileSubmit(
@@ -237,7 +249,7 @@ func GenericFileStatusCheck(file_id, endpoint string) (*FileStatusResponse, erro
 }
 
 // GenericResultFetch - save a csv containing the results of the file with the given file ID
-func GenericResultFetch(file_id, endpoint string, file_writer io.WriteCloser) error {
+func GenericResultFetch(file_id, endpoint string, file_writer io.Writer) error {
 	var error_ error
 
 	// make request
@@ -251,6 +263,7 @@ func GenericResultFetch(file_id, endpoint string, file_writer io.WriteCloser) er
 
 	url_to_request = fmt.Sprintf("%s?%s", url_to_request, params.Encode())
 	response_http, error_ := http.Get(url_to_request)
+	
 	if error_ != nil {
 		return error_
 	}
@@ -260,8 +273,14 @@ func GenericResultFetch(file_id, endpoint string, file_writer io.WriteCloser) er
 	if response_http.StatusCode != 200 {
 		return handleErrorPayload(response_http)
 	}
+
+	// a binary file is expected as response
 	content_type := response_http.Header.Get("Content-Type")
-	if content_type != "application/octet-stream" {
+	if content_type == CONTENT_TYPE_JSON {
+		// {"success": false, "message": ...}
+		return handleErrorPayload(response_http)
+	}
+	if content_type != CONTENT_TYPE_OCTET_STREAM {
 		return fmt.Errorf(
 			"unexpected content type; expected %s, got %s",
 			"application/octet-stream",
@@ -270,13 +289,11 @@ func GenericResultFetch(file_id, endpoint string, file_writer io.WriteCloser) er
 	}
 
 	// save to file
-	response_contents, error_ := io.ReadAll(response_http.Request.Body)
+	response_contents, error_ := io.ReadAll(response_http.Body)
 	if error_ != nil {
 		return errors.Join(errors.New("could not read response body"), error_)
 	}
 
-	defer file_writer.Close()
-	file_writer.Write(response_contents)
 	_, error_ = file_writer.Write(response_contents)
 	if error_ != nil {
 		return errors.Join(errors.New("could not write into given file"), error_)
@@ -284,24 +301,34 @@ func GenericResultFetch(file_id, endpoint string, file_writer io.WriteCloser) er
 	return nil
 }
 
-// GenericFileDelete - cancel the process started for a given file ID
-func GenericFileDelete(file_id, endpoint string) error {
+// GenericFileDelete - delete the result file associated with a file ID
+func GenericFileDelete(file_id, endpoint string) (*FileValidationResponse, error) {
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", file_id)
 
 	url_to_request, error_ := url.JoinPath(BULK_URI, endpoint)
 	if error_ != nil {
-		return error_
+		return nil, error_
 	}
 	url_to_request = fmt.Sprintf("%s?%s", url_to_request, params.Encode())
 
 	response_http, error_ := http.Get(url_to_request)
 	if error_ != nil {
-		return error_
+		return nil, error_
 	}
 	if response_http.StatusCode != 200 {
-		return handleErrorPayload(response_http)
+		return nil, handleErrorPayload(response_http)
 	}
-	return nil
+
+	defer response_http.Body.Close()
+	// only `Success` and `Message` are of interest
+	response_object := &FileValidationResponse{}
+	error_ = json.NewDecoder(response_http.Body).Decode(response_object)
+	if error_ != nil {
+		return nil, error_
+	}
+
+	response_object.FileId = file_id
+	return response_object, nil
 }

@@ -29,7 +29,7 @@ const (
 	ENDPOINT_FILE_DELETE    = "/deletefile"
 	ENDPOINT_SCORING_SEND   = "/scoring/sendfile"
 	ENDPOINT_SCORING_STATUS = "/scoring/filestatus"
-	ENDPOINT_SCORING_RESULT	= "/scoring/getfile" // Content-type: application/octet-stream
+	ENDPOINT_SCORING_RESULT = "/scoring/getfile" // Content-type: application/octet-stream
 	ENDPOINT_SCORING_DELETE = "/scoring/deletefile"
 	SANDBOX_IP              = "99.110.204.1"
 )
@@ -75,7 +75,6 @@ const (
 // APIResponse basis for api responses
 type APIResponse interface{}
 
-
 // API_KEY the API key used in order to make the requests
 var API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
 
@@ -97,7 +96,6 @@ func ImportApiKeyFromEnvFile() bool {
 	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
 	return true
 }
-
 
 // PrepareURL prepares the URL for a get request by attaching both the API
 // key and the given params

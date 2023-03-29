@@ -14,11 +14,11 @@ func BulkValidationFileStatus(file_id string) (*FileStatusResponse, error) {
 }
 
 // BulkValidationResult - save a csv containing the results of the file with the given file ID
-func BulkValidationResult(file_id string, file_writer io.WriteCloser) error {
+func BulkValidationResult(file_id string, file_writer io.Writer) error {
 	return GenericResultFetch(file_id, ENDPOINT_FILE_RESULT, file_writer)
 }
 
-// BulkValidationFileDelete - cancel the validation process for a given file ID
-func BulkValidationFileDelete(file_id string) error {
+// BulkValidationFileDelete - delete the result file associated with a file ID
+func BulkValidationFileDelete(file_id string) (*FileValidationResponse, error) {
 	return GenericFileDelete(file_id, ENDPOINT_FILE_DELETE)
 }
