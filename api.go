@@ -2,6 +2,7 @@ package zerobouncego
 
 import (
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,7 +11,15 @@ import (
 
 // CreditsResponse response of the credits balance
 type CreditsResponse struct {
-	Credits int `json:"Credits"`
+	CreditsRaw	string `json:"Credits"`
+}
+
+func (c *CreditsResponse)Credits() int {
+	amount, error_ := strconv.Atoi(c.CreditsRaw)
+	if error_ != nil {
+		return -1
+	}
+	return amount
 }
 
 // ValidateResponse response structure for single email validation

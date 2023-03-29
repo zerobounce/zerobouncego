@@ -55,7 +55,7 @@ func mockCreditsRequest() {
 			if args.Get("api_key") == "" {
 				return httpmock.NewStringResponse(400, `{"error": "Missing parameter: api_key."}`), nil
 			}
-			return httpmock.NewStringResponse(200, `{"Credits": 50}`), nil
+			return httpmock.NewStringResponse(200, `{"Credits": "50"}`), nil
 		},
 	)
 }
@@ -91,7 +91,7 @@ func TestCreditsOk(t *testing.T) {
 
 	credits_result, error_ := GetCredits()
 	if !assert.Nil(t, error_) { t.FailNow() }
-	assert.Equal(t, credits_result.Credits, 50)
+	assert.Equal(t, credits_result.Credits(), 50)
 }
 
 func TestApiUsageNoKey(t *testing.T) {
