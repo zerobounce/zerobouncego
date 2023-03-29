@@ -138,15 +138,15 @@ func TestScoringSubmit200NotSuccess(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder(
-		"POST",
-		`=~^(.*)`+ENDPOINT_SCORING_SEND+`(.*)\z`,
-		httpmock.NewStringResponder(201, sample_scoring_file_status_200_invalid),
+	// 200OK will be interpret as error as the file was not created
+	mockOkResponse(
+		"GET",
+		ENDPOINT_SCORING_SEND,
+		sample_scoring_file_status_200_invalid,
 	)
 	response_object, error_ := AiScoringFileSubmit(testingCsvFileOk(), false)
-	assert.Nil(t, error_)
-	if !assert.NotNil(t, response_object) { t.FailNow() }
-	assert.Equal(t, false, response_object.Success)
+	assert.NotNil(t, error_)
+	assert.Nil(t, response_object)
 }
 
 // TestScoringSubmit200Success - process expected to go accordingly
