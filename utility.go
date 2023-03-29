@@ -258,3 +258,24 @@ var emailsToValidate = []SingleTest{
 	{Email: "free_email@example.com", Status: "valid", SubStatus: "", FreeEmail: true},
 	{Email: "role_based_catch_all@example.com", Status: "do_not_mail", SubStatus: "role_based_catch_all"},
 }
+
+// variables used for file-related unit tests
+const (
+	sample_file_contents   = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
+	sample_error_message   = "error message"
+	file_name_400          = "filename_400.csv"
+	send_file_response_400 = `{
+		"success": false,
+		"error_message": "` + sample_error_message + `",
+		"message": "` + sample_error_message + `"
+	}`
+	file_name_200          = "filename_200.csv"
+	testing_file_id        = "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
+	send_file_response_200 = `
+	{
+		"success": true,
+		"message": "File Accepted",
+		"file_name": "` + file_name_200 + `",
+		"file_id": "` + testing_file_id + `"
+	}`
+)
