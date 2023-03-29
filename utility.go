@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/joho/godotenv"
 )
 
@@ -17,14 +18,14 @@ import (
 
 const (
 	URI                     = `https://api.zerobounce.net/v2/`
-	BULK_URI				= `https://bulkapi.zerobounce.net/v2/`
+	BULK_URI                = `https://bulkapi.zerobounce.net/v2/`
 	ENDPOINT_CREDITS        = "getcredits"
 	ENDPOINT_VALIDATE       = "validate"
 	ENDPOINT_API_USAGE      = "getapiusage"
 	ENDPOINT_BATCH_VALIDATE = "validatebatch"
 	ENDPOINT_FILE_SEND      = "sendfile"
 	ENDPOINT_FILE_STATUS    = "filestatus"
-	ENDPOINT_FILE_GET       = "getfile" // Content-type: application/octet-stream
+	ENDPOINT_FILE_RESULT    = "getfile" // Content-type: application/octet-stream
 	ENDPOINT_FILE_DELETE    = "deletefile"
 	SANDBOX_IP              = "99.110.204.1"
 )
@@ -72,22 +73,22 @@ type APIResponse interface{}
 
 // CsvFile - used for bulk validations that include csv files
 type CsvFile struct {
-	File				io.Reader	`json:"file"`
-	FileName			string		`json:"file_name"`
-	HasHeaderRow		bool		`json:"has_header_row"`
-	
+	File         io.Reader `json:"file"`
+	FileName     string    `json:"file_name"`
+	HasHeaderRow bool      `json:"has_header_row"`
+
 	// column index starts from 1
 	// if either of the following will be 0, will be excluded from the request
-	EmailAddressColumn 	int			`json:"email_address_column"`
-	FirstNameColumn		int			`json:"first_name_column"`
-	LastNameColumn		int			`json:"last_name_column"`
-	GenderColumn		int			`json:"gender_column"`
-	IpAddressColumn		int			`json:"ip_address_column"`
+	EmailAddressColumn int `json:"email_address_column"`
+	FirstNameColumn    int `json:"first_name_column"`
+	LastNameColumn     int `json:"last_name_column"`
+	GenderColumn       int `json:"gender_column"`
+	IpAddressColumn    int `json:"ip_address_column"`
 }
 
 // ColumnsMapping - function generating how columns-index mapping of the instance
-func (c *CsvFile)ColumnsMapping() map[string]int {
-	column_to_value := make(map[string]int) 
+func (c *CsvFile) ColumnsMapping() map[string]int {
+	column_to_value := make(map[string]int)
 
 	// include this field regardless, as it's required
 	column_to_value["email_address_column"] = c.EmailAddressColumn
@@ -122,7 +123,7 @@ func SetApiKey(new_api_key_value string) {
 // ImportApiKeyFromEnvFile provided that a .env file can be found where the
 // program is running, load it, extract the API key and set it
 func ImportApiKeyFromEnvFile() bool {
-	error_ := godotenv.Load(".env") 
+	error_ := godotenv.Load(".env")
 	if error_ != nil {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
 		return false
@@ -130,7 +131,6 @@ func ImportApiKeyFromEnvFile() bool {
 	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
 	return true
 }
-
 
 // ImportCsvFile - import a file to be uploaded for validation
 func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*CsvFile, error) {
@@ -169,7 +169,6 @@ func PrepareURL(endpoint string, params url.Values) (string, error) {
 	}
 	return fmt.Sprintf("%s?%s", final_url, params.Encode()), nil
 }
-
 
 // ErrorFromResponse given a response who is expected to have a json structure,
 // generate a joined response of all values within that json
@@ -225,7 +224,6 @@ type SingleTest struct {
 	FreeEmail bool
 }
 
-
 var emailsToValidate = []SingleTest{
 	{Email: "disposable@example.com", Status: "do_not_mail", SubStatus: "disposable"},
 	{Email: "invalid@example.com", Status: "invalid", SubStatus: "mailbox_not_found"},
@@ -261,8 +259,12 @@ var emailsToValidate = []SingleTest{
 
 // variables used for file-related unit tests
 const (
-	sample_file_contents   = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
-	sample_error_message   = "error message"
+	sample_date_time = "2023-01-12T13:00:00Z"
+	sample_file_contents = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
+	sample_error_message = "error message"
+	sample_error_400     = `{
+		"error": "` + sample_error_message + `"
+	}`
 	file_name_400          = "filename_400.csv"
 	send_file_response_400 = `{
 		"success": false,
@@ -279,3 +281,42 @@ const (
 		"file_id": "` + testing_file_id + `"
 	}`
 )
+
+// mockErrorResponse - mock http library to return error for given endpoint
+func mockErrorResponse(method, endpoint string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		// httpmock.NewErrorResponder(errors.New(sample_error_message)),
+		func(r *http.Request) (*http.Response, error) { return nil, errors.New(sample_error_message) },
+	)
+}
+
+// mockBadRequestResponse - mock http library to return 400 response for given endpoint
+func mockBadRequestResponse(method, endpoint string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		httpmock.NewStringResponder(400, sample_error_400),
+	)
+}
+
+// mockBadRequestResponse - mock http library to return 200Ok response for given endpoint
+// returning given endpoint
+func mockOkResponse(method, endpoint, content string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		httpmock.NewStringResponder(200, content),
+	)
+}
+
+// testingCsvFileOk - sample csv file, used in testing
+func testingCsvFileOk() CsvFile {
+	return CsvFile{
+		File:               strings.NewReader(sample_file_contents),
+		FileName:           file_name_200,
+		HasHeaderRow:       true,
+		EmailAddressColumn: 1,
+	}
+}
