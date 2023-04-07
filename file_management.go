@@ -268,7 +268,7 @@ func GenericResultFetch(file_id, endpoint string, file_writer io.Writer) error {
 
 	url_to_request = fmt.Sprintf("%s?%s", url_to_request, params.Encode())
 	response_http, error_ := http.Get(url_to_request)
-	
+
 	if error_ != nil {
 		return error_
 	}
