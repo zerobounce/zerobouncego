@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/joho/godotenv"
 )
 
@@ -17,10 +18,15 @@ import (
 
 const (
 	URI                     = `https://api.zerobounce.net/v2/`
+	BULK_URI                = `https://bulkapi.zerobounce.net/v2/`
 	ENDPOINT_CREDITS        = "getcredits"
 	ENDPOINT_VALIDATE       = "validate"
 	ENDPOINT_API_USAGE      = "getapiusage"
 	ENDPOINT_BATCH_VALIDATE = "validatebatch"
+	ENDPOINT_FILE_SEND      = "sendfile"
+	ENDPOINT_FILE_STATUS    = "filestatus"
+	ENDPOINT_FILE_RESULT    = "getfile" // Content-type: application/octet-stream
+	ENDPOINT_FILE_DELETE    = "deletefile"
 	SANDBOX_IP              = "99.110.204.1"
 )
 
@@ -65,6 +71,45 @@ const (
 // APIResponse basis for api responses
 type APIResponse interface{}
 
+// CsvFile - used for bulk validations that include csv files
+type CsvFile struct {
+	File         io.Reader `json:"file"`
+	FileName     string    `json:"file_name"`
+	HasHeaderRow bool      `json:"has_header_row"`
+
+	// column index starts from 1
+	// if either of the following will be 0, will be excluded from the request
+	EmailAddressColumn int `json:"email_address_column"`
+	FirstNameColumn    int `json:"first_name_column"`
+	LastNameColumn     int `json:"last_name_column"`
+	GenderColumn       int `json:"gender_column"`
+	IpAddressColumn    int `json:"ip_address_column"`
+}
+
+// ColumnsMapping - function generating how columns-index mapping of the instance
+func (c *CsvFile) ColumnsMapping() map[string]int {
+	column_to_value := make(map[string]int)
+
+	// include this field regardless, as it's required
+	column_to_value["email_address_column"] = c.EmailAddressColumn
+
+	// populate optional values
+	if c.FirstNameColumn != 0 {
+		column_to_value["first_name_column"] = c.FirstNameColumn
+	}
+	if c.LastNameColumn != 0 {
+		column_to_value["last_name_column"] = c.LastNameColumn
+	}
+	if c.GenderColumn != 0 {
+		column_to_value["gender_column"] = c.GenderColumn
+	}
+	if c.IpAddressColumn != 0 {
+		column_to_value["ip_address_column"] = c.IpAddressColumn
+	}
+
+	return column_to_value
+}
+
 // API_KEY the API key used in order to make the requests
 var API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
 
@@ -87,15 +132,42 @@ func ImportApiKeyFromEnvFile() bool {
 	return true
 }
 
+// ImportCsvFile - import a file to be uploaded for validation
+func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*CsvFile, error) {
+	var error_ error
+	_, error_ = os.Stat(path_to_file)
+	if error_ != nil {
+		return nil, error_
+	}
+	file, error_ := os.Open(path_to_file)
+	if error_ != nil {
+		return nil, error_
+	}
+
+	// server interprets columns indexing from 1
+	if email_column == 0 {
+		email_column = 1
+	}
+
+	csv_file := &CsvFile{
+		File: file, FileName: file.Name(), HasHeaderRow: has_header, EmailAddressColumn: email_column,
+	}
+	return csv_file, nil
+}
+
 // PrepareURL prepares the URL for a get request by attaching both the API
 // key and the given params
-func PrepareURL(endpoint string, params url.Values) string {
+func PrepareURL(endpoint string, params url.Values) (string, error) {
 
 	// Set API KEY
 	params.Set("api_key", API_KEY)
 
 	// Create a return the final URL
-	return fmt.Sprintf("%s/%s?%s", URI, endpoint, params.Encode())
+	final_url, error_ := url.JoinPath(URI, endpoint)
+	if error_ != nil {
+		return "", error_
+	}
+	return fmt.Sprintf("%s?%s", final_url, params.Encode()), nil
 }
 
 // ErrorFromResponse given a response who is expected to have a json structure,
@@ -152,8 +224,6 @@ type SingleTest struct {
 	FreeEmail bool
 }
 
-// add test for unknown@example.com also
-
 var emailsToValidate = []SingleTest{
 	{Email: "disposable@example.com", Status: "do_not_mail", SubStatus: "disposable"},
 	{Email: "invalid@example.com", Status: "invalid", SubStatus: "mailbox_not_found"},
@@ -185,4 +255,68 @@ var emailsToValidate = []SingleTest{
 	{Email: "unroutable_ip_address@example.com", Status: "invalid", SubStatus: "unroutable_ip_address"},
 	{Email: "free_email@example.com", Status: "valid", SubStatus: "", FreeEmail: true},
 	{Email: "role_based_catch_all@example.com", Status: "do_not_mail", SubStatus: "role_based_catch_all"},
+}
+
+// variables used for file-related unit tests
+const (
+	sample_date_time = "2023-01-12T13:00:00Z"
+	sample_file_contents = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
+	sample_error_message = "error message"
+	sample_error_400     = `{
+		"error": "` + sample_error_message + `"
+	}`
+	file_name_400          = "filename_400.csv"
+	send_file_response_400 = `{
+		"success": false,
+		"error_message": "` + sample_error_message + `",
+		"message": "` + sample_error_message + `"
+	}`
+	file_name_200          = "filename_200.csv"
+	testing_file_id        = "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
+	send_file_response_200 = `
+	{
+		"success": true,
+		"message": "File Accepted",
+		"file_name": "` + file_name_200 + `",
+		"file_id": "` + testing_file_id + `"
+	}`
+)
+
+// mockErrorResponse - mock http library to return error for given endpoint
+func mockErrorResponse(method, endpoint string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		// httpmock.NewErrorResponder(errors.New(sample_error_message)),
+		func(r *http.Request) (*http.Response, error) { return nil, errors.New(sample_error_message) },
+	)
+}
+
+// mockBadRequestResponse - mock http library to return 400 response for given endpoint
+func mockBadRequestResponse(method, endpoint string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		httpmock.NewStringResponder(400, sample_error_400),
+	)
+}
+
+// mockBadRequestResponse - mock http library to return 200Ok response for given endpoint
+// returning given endpoint
+func mockOkResponse(method, endpoint, content string) {
+	httpmock.RegisterResponder(
+		method,
+		`=~^(.*)`+endpoint+`(.*)\z`,
+		httpmock.NewStringResponder(200, content),
+	)
+}
+
+// testingCsvFileOk - sample csv file, used in testing
+func testingCsvFileOk() CsvFile {
+	return CsvFile{
+		File:               strings.NewReader(sample_file_contents),
+		FileName:           file_name_200,
+		HasHeaderRow:       true,
+		EmailAddressColumn: 1,
+	}
 }
