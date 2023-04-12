@@ -22,8 +22,6 @@ func mockValidateRequest() {
 				return nil, errors.New("'api_key' missing from request arguments")
 			}
 			email_address := request_query.Get("email")
-			// response_payload := "HTTP/1.1 200 OK\r\n\r\n" + MOCK_VALIDATE_RESPONSE[email_address] + "\n"
-			// response, error_ := http.ReadResponse(bufio.NewReader(strings.NewReader(response_payload)), req)
 
 			mock_response := MOCK_VALIDATE_RESPONSE[email_address]
 			if mock_response == "" {
