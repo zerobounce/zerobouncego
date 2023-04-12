@@ -1,5 +1,5 @@
 # GoZeroBounce
-Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounce.net/docs/email-validation-api-quickstart/) 
+Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounce.net/docs/email-validation-api-quickstart/)
 THIS PROJECT IS STILL IN DEVELOPMENT!
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)
@@ -9,9 +9,9 @@ THIS PROJECT IS STILL IN DEVELOPMENT!
 go get github.com/zerobounce-llc/zerobouncego
 ```
 
-This package uses the zero-bounce API which requires an API key. This key can either be provide in two ways:
+This package uses the zero-bounce API which requires an API key. This key can be provide in two ways:
 1. through an environment variable `ZERO_BOUNCE_API_KEY` (either explicit or provided trough an `.env` file)
-1. by settings explicitly in code, using the following method:
+2. by settings explicitly in code, using the following method:
 ```go
 zerobouncego.SetApiKey("mysecretapikey")
 ```
@@ -29,7 +29,7 @@ import (
 
 func main() {
 
-    zerobouncego.APIKey = "... Your API KEY ..." 
+    zerobouncego.APIKey = "... Your API KEY ..."
 
     // For Querying a single E-Mail and IP
     // IP can also be an empty string
@@ -45,7 +45,7 @@ func main() {
         fmt.Println("This email is disposable")
     }
 
-    // You can also check your credits 
+    // You can also check your credits
     credits := zerobouncego.GetCredits()
     fmt.Println("Credits left:", credits.Credits)
 }
@@ -53,7 +53,7 @@ func main() {
 
 ## Testing
 
-This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the one ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
+This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the ones ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
 
 In order to run the integration tests:
 - set appropriate `ZERO_BOUNCE_API_KEY` environment variable

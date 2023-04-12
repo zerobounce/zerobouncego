@@ -21,46 +21,45 @@ const (
 	ENDPOINT_VALIDATE       = "validate"
 	ENDPOINT_API_USAGE      = "getapiusage"
 	ENDPOINT_BATCH_VALIDATE = "validatebatch"
-	SANDBOX_IP				= "99.110.204.1"
+	SANDBOX_IP              = "99.110.204.1"
 )
-
 
 // validation statuses
 const (
-	S_VALID			= "valid"
-	S_INVALID		= "invalid"
-	S_CATCH_ALL		= "catch-all"
-	S_UNKNOWN		= "unknown"
-	S_SPAMTRAP		= "spamtrap"
-	S_ABUSE			= "abuse"
-	S_DO_NOT_MAIL	= "do_not_mail"
+	S_VALID       = "valid"
+	S_INVALID     = "invalid"
+	S_CATCH_ALL   = "catch-all"
+	S_UNKNOWN     = "unknown"
+	S_SPAMTRAP    = "spamtrap"
+	S_ABUSE       = "abuse"
+	S_DO_NOT_MAIL = "do_not_mail"
 )
 
 // validation sub statuses
 const (
-	SS_ANTISPAM_SYSTEM				= "antispam_system"
-	SS_GREYLISTED					= "greylisted"
-	SS_MAIL_SERVER_TEMPORARY_ERROR	= "mail_server_temporary_error"
-	SS_FORCIBLE_DISCONNECT			= "forcible_disconnect"
-	SS_MAIL_SERVER_DID_NOT_RESPOND	= "mail_server_did_not_respond"
-	SS_TIMEOUT_EXCEEDED				= "timeout_exceeded"
-	SS_FAILED_SMTP_CONNECTION		= "failed_smtp_connection"
-	SS_MAILBOX_QUOTA_EXCEEDED		= "mailbox_quota_exceeded"
-	SS_EXCEPTION_OCCURRED			= "exception_occurred"
-	SS_POSSIBLE_TRAP				= "possible_trap"
-	SS_ROLE_BASED					= "role_based"
-	SS_GLOBAL_SUPPRESSION			= "global_suppression"
-	SS_MAILBOX_NOT_FOUND			= "mailbox_not_found"
-	SS_NO_DNS_ENTRIES				= "no_dns_entries"
-	SS_FAILED_SYNTAX_CHECK			= "failed_syntax_check"
-	SS_POSSIBLE_TYPO				= "possible_typo"
-	SS_UNROUTABLE_IP_ADDRESS		= "unroutable_ip_address"
-	SS_LEADING_PERIOD_REMOVED		= "leading_period_removed"
-	SS_DOES_NOT_ACCEPT_MAIL			= "does_not_accept_mail"
-	SS_ALIAS_ADDRESS				= "alias_address"
-	SS_ROLE_BASED_CATCH_ALL			= "role_based_catch_all"
-	SS_DISPOSABLE					= "disposable"
-	SS_TOXIC						= "toxic"
+	SS_ANTISPAM_SYSTEM             = "antispam_system"
+	SS_GREYLISTED                  = "greylisted"
+	SS_MAIL_SERVER_TEMPORARY_ERROR = "mail_server_temporary_error"
+	SS_FORCIBLE_DISCONNECT         = "forcible_disconnect"
+	SS_MAIL_SERVER_DID_NOT_RESPOND = "mail_server_did_not_respond"
+	SS_TIMEOUT_EXCEEDED            = "timeout_exceeded"
+	SS_FAILED_SMTP_CONNECTION      = "failed_smtp_connection"
+	SS_MAILBOX_QUOTA_EXCEEDED      = "mailbox_quota_exceeded"
+	SS_EXCEPTION_OCCURRED          = "exception_occurred"
+	SS_POSSIBLE_TRAP               = "possible_trap"
+	SS_ROLE_BASED                  = "role_based"
+	SS_GLOBAL_SUPPRESSION          = "global_suppression"
+	SS_MAILBOX_NOT_FOUND           = "mailbox_not_found"
+	SS_NO_DNS_ENTRIES              = "no_dns_entries"
+	SS_FAILED_SYNTAX_CHECK         = "failed_syntax_check"
+	SS_POSSIBLE_TYPO               = "possible_typo"
+	SS_UNROUTABLE_IP_ADDRESS       = "unroutable_ip_address"
+	SS_LEADING_PERIOD_REMOVED      = "leading_period_removed"
+	SS_DOES_NOT_ACCEPT_MAIL        = "does_not_accept_mail"
+	SS_ALIAS_ADDRESS               = "alias_address"
+	SS_ROLE_BASED_CATCH_ALL        = "role_based_catch_all"
+	SS_DISPOSABLE                  = "disposable"
+	SS_TOXIC                       = "toxic"
 )
 
 // APIResponse basis for api responses
@@ -79,7 +78,7 @@ func SetApiKey(new_api_key_value string) {
 // ImportApiKeyFromEnvFile provided that a .env file can be found where the
 // program is running, load it, extract the API key and set it
 func ImportApiKeyFromEnvFile() bool {
-	error_ := godotenv.Load(".env") 
+	error_ := godotenv.Load(".env")
 	if error_ != nil {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
 		return false
@@ -87,7 +86,6 @@ func ImportApiKeyFromEnvFile() bool {
 	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
 	return true
 }
-
 
 // PrepareURL prepares the URL for a get request by attaching both the API
 // key and the given params
@@ -99,7 +97,6 @@ func PrepareURL(endpoint string, params url.Values) string {
 	// Create a return the final URL
 	return fmt.Sprintf("%s/%s?%s", URI, endpoint, params.Encode())
 }
-
 
 // ErrorFromResponse given a response who is expected to have a json structure,
 // generate a joined response of all values within that json
@@ -124,8 +121,8 @@ func ErrorFromResponse(response *http.Response) error {
 	for _, value := range error_response {
 		error_strings = append(error_strings, value)
 	}
-	return errors.New("error: " + strings.Join(error_strings, ", "))}
-
+	return errors.New("error: " + strings.Join(error_strings, ", "))
+}
 
 // DoGetRequest does a GET request to the API
 func DoGetRequest(url string, object APIResponse) error {
@@ -146,7 +143,6 @@ func DoGetRequest(url string, object APIResponse) error {
 	err = json.NewDecoder(response.Body).Decode(&object)
 	return err
 }
-
 
 // TESTING
 type SingleTest struct {
