@@ -62,7 +62,3 @@ In order to run the integration tests:
 
 NOTE: currently, the unit tests can be updated such that, by removing the mocking and explicit API key setting, they should work as integration tests as well AS LONG AS a valid API key is provided via environment
 
-
-## Already implemented
-- Validate single email
-- Get gredits
