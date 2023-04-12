@@ -137,7 +137,6 @@ func handleErrorPayload(response *http.Response) error {
 	return fmt.Errorf("error message: %s", response_payload["message"])
 }
 
-
 // ErrorFromResponse given a response who is expected to have a json structure,
 // generate a joined response of all values within that json
 // This function was done because error messages have inconsistent keys
