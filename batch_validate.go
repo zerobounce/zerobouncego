@@ -24,8 +24,8 @@ type EmailBatchError struct {
 // ValidateBatchResponse represents the structure of a 200OK batch validate
 // response
 type ValidateBatchResponse struct {
-	EmailBatch []ValidateResponse	`json:"email_batch"`
-	Errors     []EmailBatchError	`json:"errors"`
+	EmailBatch []ValidateResponse `json:"email_batch"`
+	Errors     []EmailBatchError  `json:"errors"`
 }
 
 // ValidateBatch given a list of emails (and, optionally, their IPs), validate
@@ -36,7 +36,7 @@ func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error)
 
 	// request preparation
 	payload_data := map[string]interface{}{
-		"api_key": API_KEY,
+		"api_key":     API_KEY,
 		"email_batch": emails_list,
 	}
 	request_payload_builder := &strings.Builder{}

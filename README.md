@@ -6,7 +6,7 @@ THIS PROJECT IS STILL IN DEVELOPMENT!
 
 ## Installation and Usage
 ```sh
-go get github.com/zerobounce-llc/zerobouncego
+go get github.com/zerobounce/zerobouncego
 ```
 
 This package uses the zero-bounce API which requires an API key. This key can be provide in two ways:
@@ -24,7 +24,7 @@ package main
 import (
     "fmt"
     "os"
-    "github.com/zerobounce-llc/zerobouncego"
+    "github.com/zerobounce/zerobouncego"
 )
 
 func main() {

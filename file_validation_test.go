@@ -50,12 +50,7 @@ const (
 	sample_validation_result_200_content = `inaccurate_content_used_for_mocking`
 )
 
-const _ = `
-Test cases:
-- response 400
-- response 200
-`
-
+// handleMockedBulkValidate - simple file-to-response mock
 func handleMockedBulkValidate(request *http.Request) (*http.Response, error) {
 	_, file_header, error_ := request.FormFile("file")
 	if error_ != nil {
