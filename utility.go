@@ -20,6 +20,7 @@ const (
 	URI                     = `https://api.zerobounce.net/v2/`
 	BULK_URI                = `https://bulkapi.zerobounce.net/v2/`
 	ENDPOINT_CREDITS        = "getcredits"
+	ENDPOINT_ACTIVITY_DATA	= "activity"
 	ENDPOINT_VALIDATE       = "validate"
 	ENDPOINT_API_USAGE      = "getapiusage"
 	ENDPOINT_BATCH_VALIDATE = "validatebatch"
@@ -130,6 +131,29 @@ func ImportApiKeyFromEnvFile() bool {
 	}
 	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
 	return true
+}
+
+// ImportCsvFile - import a file to be uploaded for validation
+func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*CsvFile, error) {
+	var error_ error
+	_, error_ = os.Stat(path_to_file)
+	if error_ != nil {
+		return nil, error_
+	}
+	file, error_ := os.Open(path_to_file)
+	if error_ != nil {
+		return nil, error_
+	}
+
+	// server interprets columns indexing from 1
+	if email_column == 0 {
+		email_column = 1
+	}
+
+	csv_file := &CsvFile{
+		File: file, FileName: file.Name(), HasHeaderRow: has_header, EmailAddressColumn: email_column,
+	}
+	return csv_file, nil
 }
 
 // ImportCsvFile - import a file to be uploaded for validation
