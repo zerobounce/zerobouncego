@@ -22,14 +22,14 @@ const (
 		"found": false,
 		"active_in_days": null
 	}`
-	email_address_found = "valid@example.com"
+	email_address_found     = "valid@example.com"
 	email_address_not_found = "unknown@example.com"
 )
 
 // mockActivityDataResponses mock expected responses from GET/activity
 func mockActivityDataResponses() {
 	httpmock.RegisterResponder(
-		"GET", `=~^(.*)` + ENDPOINT_ACTIVITY_DATA + `(.*)\z`,
+		"GET", `=~^(.*)`+ENDPOINT_ACTIVITY_DATA+`(.*)\z`,
 		func(req *http.Request) (*http.Response, error) {
 			query_params := req.URL.Query()
 
@@ -61,7 +61,9 @@ func TestActivityDataError(t *testing.T) {
 
 	activity_data, error_ := GetActivityData("")
 	assert.Nil(t, activity_data)
-	if !assert.NotNil(t, error_) { t.FailNow() }
+	if !assert.NotNil(t, error_) {
+		t.FailNow()
+	}
 	assert.Contains(t, error_.Error(), "email must be specified")
 }
 
@@ -73,7 +75,9 @@ func TestActivityDataNotFound(t *testing.T) {
 
 	activity_data, error_ := GetActivityData(email_address_not_found)
 	assert.Nil(t, error_)
-	if !assert.NotNil(t, activity_data) { t.FailNow() }
+	if !assert.NotNil(t, activity_data) {
+		t.FailNow()
+	}
 	assert.Equal(t, false, activity_data.Found)
 	assert.Equal(t, false, activity_data.ActiveInDaysRaw.Valid)
 	assert.Equal(t, -1, activity_data.ActiveInDays())
@@ -87,7 +91,9 @@ func TestActivityDataFound(t *testing.T) {
 
 	activity_data, error_ := GetActivityData(email_address_found)
 	assert.Nil(t, error_)
-	if !assert.NotNil(t, activity_data) { t.FailNow() }
+	if !assert.NotNil(t, activity_data) {
+		t.FailNow()
+	}
 	assert.Equal(t, true, activity_data.Found)
 	assert.Equal(t, true, activity_data.ActiveInDaysRaw.Valid)
 	assert.Equal(t, 180, activity_data.ActiveInDays())

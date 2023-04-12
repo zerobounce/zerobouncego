@@ -35,6 +35,11 @@ const (
 	SANDBOX_IP              = "99.110.204.1"
 )
 
+const (
+	DATE_TIME_FORMAT = "2006-01-02 15:04:05"
+	DATE_ONLY_FORMAT = "2006-01-02"
+)
+
 // validation statuses
 const (
 	S_VALID       = "valid"
@@ -113,6 +118,25 @@ func PrepareURL(endpoint string, params url.Values) (string, error) {
 	return fmt.Sprintf("%s?%s", final_url, params.Encode()), nil
 }
 
+// handleErrorPayload - generate error based on an error payload with expected
+// response payload: {"success": false, "message": ...}
+func handleErrorPayload(response *http.Response) error {
+	var error_ error
+	var response_payload map[string]interface{} // expected keys: success, message
+	defer response.Body.Close()
+
+	error_ = json.NewDecoder(response.Body).Decode(&response_payload)
+	if error_ != nil {
+		return fmt.Errorf(
+			"error occurred while parsing a status %d response payload: %s",
+			response.StatusCode,
+			error_.Error(),
+		)
+	}
+
+	return fmt.Errorf("error message: %s", response_payload["message"])
+}
+
 // ErrorFromResponse given a response who is expected to have a json structure,
 // generate a joined response of all values within that json
 // This function was done because error messages have inconsistent keys
@@ -123,7 +147,7 @@ func ErrorFromResponse(response *http.Response) error {
 
 	response_body, error_ := io.ReadAll(response.Body)
 	if error_ != nil {
-		return errors.New("server error")
+		return errors.New("server error: " + error_.Error())
 	}
 	error_ = json.NewDecoder(strings.NewReader(string(response_body))).Decode(&error_response)
 	if error_ != nil {
@@ -202,7 +226,7 @@ var emailsToValidate = []SingleTest{
 
 // variables used for file-related unit tests
 const (
-	sample_date_time = "2023-01-12T13:00:00Z"
+	sample_date_time     = "2023-01-12T13:00:00Z"
 	sample_file_contents = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
 	sample_error_message = "error message"
 	sample_error_400     = `{
@@ -230,7 +254,6 @@ func mockErrorResponse(method, endpoint string) {
 	httpmock.RegisterResponder(
 		method,
 		`=~^(.*)`+endpoint+`(.*)\z`,
-		// httpmock.NewErrorResponder(errors.New(sample_error_message)),
 		func(r *http.Request) (*http.Response, error) { return nil, errors.New(sample_error_message) },
 	)
 }

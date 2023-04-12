@@ -40,7 +40,6 @@ func TestBulkEmailValidation(t *testing.T) {
 	}
 	for _, email_response := range response.EmailBatch {
 		test_details := emailToTest[email_response.Address]
-		// fmt.Println(email_response.Status, email_response.SubStatus, test_details)
 		assert.Equalf(t, email_response.Status, test_details.Status, "failed for email %s", email_response.Address)
 		assert.Equalf(t, email_response.SubStatus, test_details.SubStatus, "failed for email %s", email_response.Address)
 	}

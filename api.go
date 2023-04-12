@@ -11,10 +11,10 @@ import (
 
 // CreditsResponse response of the credits balance
 type CreditsResponse struct {
-	CreditsRaw	string `json:"Credits"`
+	CreditsRaw string `json:"Credits"`
 }
 
-func (c *CreditsResponse)Credits() int {
+func (c *CreditsResponse) Credits() int {
 	amount, error_ := strconv.Atoi(c.CreditsRaw)
 	if error_ != nil {
 		return -1
@@ -24,29 +24,29 @@ func (c *CreditsResponse)Credits() int {
 
 // ValidateResponse response structure for single email validation
 type ValidateResponse struct {
-	Address       string		`json:"address"`
-	Status        string		`json:"status"`
-	SubStatus     string		`json:"sub_status"`
-	FreeEmail     bool			`json:"free_email"`
-	DidYouMean    null.String	`json:"did_you_mean"`
-	Account       string		`json:"account"`
-	Domain        string		`json:"domain"`
-	DomainAgeDays null.String	`json:"domain_age_days"`
-	SMTPProvider  null.String	`json:"smtp_provider"`
-	MxRecord      string		`json:"mx_record"`
-	MxFound       string		`json:"mx_found"`
-	Firstname     null.String	`json:"firstname"`
-	Lastname      null.String	`json:"lastname"`
-	Gender        null.String	`json:"gender"`
-	Country       null.String	`json:"country"`
-	Region        null.String	`json:"region"`
-	City          null.String	`json:"city"`
-	Zipcode       null.String	`json:"zipcode"`
-	RawProcessedAt string      	`json:"processed_at"`
+	Address        string      `json:"address"`
+	Status         string      `json:"status"`
+	SubStatus      string      `json:"sub_status"`
+	FreeEmail      bool        `json:"free_email"`
+	DidYouMean     null.String `json:"did_you_mean"`
+	Account        string      `json:"account"`
+	Domain         string      `json:"domain"`
+	DomainAgeDays  null.String `json:"domain_age_days"`
+	SMTPProvider   null.String `json:"smtp_provider"`
+	MxRecord       string      `json:"mx_record"`
+	MxFound        string      `json:"mx_found"`
+	Firstname      null.String `json:"firstname"`
+	Lastname       null.String `json:"lastname"`
+	Gender         null.String `json:"gender"`
+	Country        null.String `json:"country"`
+	Region         null.String `json:"region"`
+	City           null.String `json:"city"`
+	Zipcode        null.String `json:"zipcode"`
+	RawProcessedAt string      `json:"processed_at"`
 }
 
-func (v ValidateResponse)ProcessedAt() (time.Time, error) {
-	return time.Parse(time.DateTime, strings.Trim(v.RawProcessedAt, `"`))
+func (v ValidateResponse) ProcessedAt() (time.Time, error) {
+	return time.Parse(DATE_TIME_FORMAT, strings.Trim(v.RawProcessedAt, `"`))
 }
 
 // IsValid checks if an email is valid
@@ -121,15 +121,14 @@ type ApiUsageResponse struct {
 }
 
 // StartDate provide the parsed start date of an API usage response
-func (v ApiUsageResponse)StartDate() (time.Time, error) {
+func (v ApiUsageResponse) StartDate() (time.Time, error) {
 	return time.Parse("2/1/2006", strings.Trim(v.RawStartDate, `"`))
 }
 
 // StartDate provide the parsed end date of an API usage response
-func (v ApiUsageResponse)EndDate() (time.Time, error) {
+func (v ApiUsageResponse) EndDate() (time.Time, error) {
 	return time.Parse("2/1/2006", strings.Trim(v.RawEndDate, `"`))
 }
-
 
 // Validate validates a single email
 func Validate(email string, IPAddress string) (*ValidateResponse, error) {
@@ -168,8 +167,8 @@ func GetApiUsage(start_date, end_date time.Time) (*ApiUsageResponse, error) {
 	var error_ error
 	response := &ApiUsageResponse{}
 	request_parameters := url.Values{}
-	request_parameters.Set("start_date", start_date.Format(time.DateOnly))
-	request_parameters.Set("end_date", end_date.Format(time.DateOnly))
+	request_parameters.Set("start_date", start_date.Format(DATE_ONLY_FORMAT))
+	request_parameters.Set("end_date", end_date.Format(DATE_ONLY_FORMAT))
 	url_to_request, error_ := PrepareURL(ENDPOINT_API_USAGE, request_parameters)
 	if error_ != nil {
 		return response, error_
