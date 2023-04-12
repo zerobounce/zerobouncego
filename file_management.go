@@ -78,19 +78,19 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer) e
 	// add the file AFTERWARDS
 	file_form_writer, error_ = multipart_writer.CreateFormFile("file", csv_file.FileName)
 	if error_ != nil {
-		return errors.Join(errors.New("error creating multipart form"), error_)
+		return errors.New("error creating multipart form: " + error_.Error())
 	}
 
 	// add file in form-data and add terminating boundary
 	contents, error_ := io.ReadAll(csv_file.File)
 	if error_ != nil {
-		return errors.Join(errors.New("error reading from csv file"), error_)
+		return errors.New("error reading from csv file: " + error_.Error())
 	}
 
 	file_form_writer.Write(contents)
 	error_ = multipart_writer.Close()
 	if error_ != nil {
-		return errors.Join(errors.New("error populating multiform with file"), error_)
+		return errors.New("error populating multiform with file: " + error_.Error())
 	}
 	return nil
 }
@@ -142,8 +142,11 @@ func handleErrorPayload(response *http.Response) error {
 
 	error_ = json.NewDecoder(response.Body).Decode(&response_payload)
 	if error_ != nil {
-		error_parsing := fmt.Errorf("error occurred while parsing a status %d response payload", response.StatusCode)
-		return errors.Join(error_parsing, error_)
+		return fmt.Errorf(
+			"error occurred while parsing a status %d response payload: %s",
+			response.StatusCode,
+			error_.Error(),
+		)
 	}
 
 	return fmt.Errorf("error message: %s", response_payload["message"])
@@ -296,12 +299,12 @@ func GenericResultFetch(file_id, endpoint string, file_writer io.Writer) error {
 	// save to file
 	response_contents, error_ := io.ReadAll(response_http.Body)
 	if error_ != nil {
-		return errors.Join(errors.New("could not read response body"), error_)
+		return errors.New("could not read response body: " + error_.Error())
 	}
 
 	_, error_ = file_writer.Write(response_contents)
 	if error_ != nil {
-		return errors.Join(errors.New("could not write into given file"), error_)
+		return errors.New("could not write into given file: " + error_.Error())
 	}
 	return nil
 }

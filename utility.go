@@ -35,6 +35,11 @@ const (
 	SANDBOX_IP              = "99.110.204.1"
 )
 
+const (
+	DATE_TIME_FORMAT   = "2006-01-02 15:04:05"
+	DATE_ONLY_FORMAT   = "2006-01-02"
+)
+
 // validation statuses
 const (
 	S_VALID       = "valid"
