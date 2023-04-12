@@ -13,7 +13,7 @@ This package uses the zero-bounce API which requires an API key. This key can be
 2. through an .env file that contains `ZERO_BOUNCE_API_KEY` and then calling following method before usage:
 ```go
 zerobouncego.ImportApiKeyFromEnvFile()
-``` 
+```
 3. by settings explicitly in code, using the following method:
 ```go
 zerobouncego.SetApiKey("mysecretapikey")
@@ -65,13 +65,12 @@ package main
 import (
     "fmt"
     "os"
-
     "github.com/zerobounce/zerobouncego"
 )
 
 func main() {
 
-  zerobouncego.APIKey = "... Your API KEY ..." 
+    zerobouncego.APIKey = "... Your API KEY ..."
 
 	// For Querying a single E-Mail and IP
 	// IP can also be an empty string
@@ -351,7 +350,7 @@ Example export file:
 
 ## Testing
 
-This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the one ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
+This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the ones ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
 
 In order to run the integration tests:
 - set appropriate `ZERO_BOUNCE_API_KEY` environment variable
