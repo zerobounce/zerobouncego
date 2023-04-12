@@ -133,22 +133,6 @@ func (b *FileStatusResponse) UploadDate() (time.Time, error) {
 	return time.Parse(time.RFC3339, b.UploadDateRaw)
 }
 
-// handleErrorPayload - generate error based on an error payload with expected
-// response payload: {"success": false, "message": ...}
-func handleErrorPayload(response *http.Response) error {
-	var error_ error
-	var response_payload map[string]interface{} // expected keys: success, message
-	defer response.Body.Close()
-
-	error_ = json.NewDecoder(response.Body).Decode(&response_payload)
-	if error_ != nil {
-		error_parsing := fmt.Errorf("error occurred while parsing a status %d response payload", response.StatusCode)
-		return errors.Join(error_parsing, error_)
-	}
-
-	return fmt.Errorf("error message: %s", response_payload["message"])
-}
-
 // ImportCsvFile - import a file to be uploaded for validation
 func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*CsvFile, error) {
 	var error_ error
