@@ -79,7 +79,9 @@ func TestCreditsNoKey(t *testing.T) {
 	mockCreditsRequest()
 
 	_, error_ := GetCredits()
-	if !assert.NotNil(t, error_) { t.FailNow() }
+	if !assert.NotNil(t, error_) {
+		t.FailNow()
+	}
 	assert.Contains(t, error_.Error(), "api_key")
 }
 
@@ -90,7 +92,9 @@ func TestCreditsOk(t *testing.T) {
 	mockCreditsRequest()
 
 	credits_result, error_ := GetCredits()
-	if !assert.Nil(t, error_) { t.FailNow() }
+	if !assert.Nil(t, error_) {
+		t.FailNow()
+	}
 	assert.Equal(t, credits_result.Credits(), 50)
 }
 
@@ -101,7 +105,9 @@ func TestApiUsageNoKey(t *testing.T) {
 	mockApiUsageRequest()
 
 	_, error_ := GetApiUsage(time.Now(), time.Now())
-	if !assert.NotNil(t, error_) { t.FailNow() }
+	if !assert.NotNil(t, error_) {
+		t.FailNow()
+	}
 	assert.Contains(t, error_.Error(), "api_key")
 }
 
@@ -112,7 +118,9 @@ func TestApiUsageOk(t *testing.T) {
 	mockApiUsageRequest()
 
 	api_usage, error_ := GetApiUsage(time.Now(), time.Now())
-	if !assert.Nil(t, error_) { t.FailNow() }
+	if !assert.Nil(t, error_) {
+		t.FailNow()
+	}
 
 	// assert that all following fields do not fallback to zero
 	assert.NotEqual(t, api_usage.Total, 0)
@@ -145,8 +153,8 @@ func TestApiUsageOk(t *testing.T) {
 	assert.NotEqual(t, api_usage.SubStatusFailedSmtpConnection, 0)
 	assert.NotEqual(t, api_usage.SubStatusMxForward, 0)
 
-	expected_start := time.Date(2023,1,1,0,0,0,0,time.Local)
-	expected_end := time.Date(2023,12,12,0,0,0,0,time.Local)
+	expected_start := time.Date(2023, 1, 1, 0, 0, 0, 0, time.Local)
+	expected_end := time.Date(2023, 12, 12, 0, 0, 0, 0, time.Local)
 
 	start_date, error_start := api_usage.StartDate()
 	end_date, error_end := api_usage.EndDate()

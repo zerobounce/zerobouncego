@@ -19,7 +19,7 @@ import (
 // reusing constants from file_validation_test.go
 
 const (
-	invalid_file_id  = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+	invalid_file_id          = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 	sample_scoring_submit_ok = `{
 		"success": true,
 		"message": "File Accepted",
@@ -58,7 +58,6 @@ const (
 		`"invalid@example.com","10"` + "\n" +
 		`"toxic@example.com","2"`
 )
-
 
 // TestScoringSubmitEnsureParametersSubmit - ensure that a configured `CsvFile`
 // instance has all its parameters passed to the request
@@ -193,8 +192,12 @@ func TestScoringSubmit200Success(t *testing.T) {
 	)
 
 	response_object, error_ := AiScoringFileSubmit(testingCsvFileOk(), false)
-	if !assert.Nil(t, error_) { t.FailNow() }
-	if !assert.NotNil(t, response_object) { t.FailNow() }
+	if !assert.Nil(t, error_) {
+		t.FailNow()
+	}
+	if !assert.NotNil(t, response_object) {
+		t.FailNow()
+	}
 	assert.Equal(t, true, response_object.Success)
 	assert.Equal(t, file_name_200, response_object.FileName)
 	assert.Equal(t, testing_file_id, response_object.FileId)
@@ -281,17 +284,20 @@ func TestScoringStatus200Success(t *testing.T) {
 	assert.Equal(t, true, response_object.Success)
 	assert.Equal(t, file_name_200, response_object.FileName)
 	assert.Equal(t, testing_file_id, response_object.FileId)
-	assert.Equal(t, 100., response_object.Percentage())  // float
+	assert.Equal(t, 100., response_object.Percentage()) // float
 
 	// date parsing
 	expected_parsed_date, error_ := time.Parse(time.RFC3339, sample_date_time)
-	if !assert.Nil(t, error_) {t.FailNow()}
+	if !assert.Nil(t, error_) {
+		t.FailNow()
+	}
 	response_date, error_ := response_object.UploadDate()
-	if !assert.Nil(t, error_) {t.FailNow()}
+	if !assert.Nil(t, error_) {
+		t.FailNow()
+	}
 
 	assert.Equal(t, expected_parsed_date, response_date)
 }
-
 
 // TestScoringDeleteLibraryError - error returned by http library
 func TestScoringDeleteLibraryError(t *testing.T) {
@@ -340,7 +346,9 @@ func TestScoringDelete200NotSuccess(t *testing.T) {
 	mockOkResponse("GET", ENDPOINT_SCORING_DELETE, sample_scoring_delete_200_invalid)
 	response_object, error_ := AiScoringFileDelete(testing_file_id)
 	assert.Nil(t, error_)
-	if !assert.NotNil(t, response_object) { t.FailNow() }
+	if !assert.NotNil(t, response_object) {
+		t.FailNow()
+	}
 	assert.Equal(t, false, response_object.Success)
 }
 
@@ -353,7 +361,9 @@ func TestScoringDelete200Success(t *testing.T) {
 	mockOkResponse("GET", ENDPOINT_SCORING_DELETE, sample_scoring_delete_200_success)
 	response_object, error_ := AiScoringFileDelete(testing_file_id)
 	assert.Nil(t, error_)
-	if !assert.NotNil(t, response_object) { t.FailNow() }
+	if !assert.NotNil(t, response_object) {
+		t.FailNow()
+	}
 	assert.Equal(t, true, response_object.Success)
 }
 

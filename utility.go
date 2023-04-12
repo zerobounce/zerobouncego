@@ -36,8 +36,8 @@ const (
 )
 
 const (
-	DATE_TIME_FORMAT   = "2006-01-02 15:04:05"
-	DATE_ONLY_FORMAT   = "2006-01-02"
+	DATE_TIME_FORMAT = "2006-01-02 15:04:05"
+	DATE_ONLY_FORMAT = "2006-01-02"
 )
 
 // validation statuses
@@ -207,7 +207,7 @@ var emailsToValidate = []SingleTest{
 
 // variables used for file-related unit tests
 const (
-	sample_date_time = "2023-01-12T13:00:00Z"
+	sample_date_time     = "2023-01-12T13:00:00Z"
 	sample_file_contents = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
 	sample_error_message = "error message"
 	sample_error_400     = `{

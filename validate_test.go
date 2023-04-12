@@ -13,10 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 // mockValidateRequest mock responses of GET/validate
 func mockValidateRequest() {
-	httpmock.RegisterResponder("GET", `=~^(.*)` + ENDPOINT_VALIDATE + `(.*)\z`,
+	httpmock.RegisterResponder("GET", `=~^(.*)`+ENDPOINT_VALIDATE+`(.*)\z`,
 		func(req *http.Request) (*http.Response, error) {
 			request_query := req.URL.Query()
 			if request_query.Get("api_key") == "" {
@@ -38,11 +37,11 @@ func mockValidateRequest() {
 // mockBatchValidateRequest mock responses of GET/validatebatch
 func mockBatchValidateRequest() {
 	type BatchValidateRequestPayload struct {
-		ApiKey string            `json:"api_key"`
+		ApiKey string             `json:"api_key"`
 		Emails *[]EmailToValidate `json:"email_batch"`
 	}
 
-	httpmock.RegisterResponder("POST", `=~^(.*)` + ENDPOINT_BATCH_VALIDATE + `(.*)\z`,
+	httpmock.RegisterResponder("POST", `=~^(.*)`+ENDPOINT_BATCH_VALIDATE+`(.*)\z`,
 		func(req *http.Request) (*http.Response, error) {
 			var error_ error
 			var email_responses []string
@@ -76,7 +75,7 @@ func mockBatchValidateRequest() {
 				return httpmock.NewStringResponse(400, missing_email_batch_param), nil
 			}
 			if request_body.ApiKey == "" {
-				return httpmock.NewStringResponse(200, `{"email_batch": [], "errors": [` + invalid_api_key + `]}`), nil
+				return httpmock.NewStringResponse(200, `{"email_batch": [], "errors": [`+invalid_api_key+`]}`), nil
 			}
 			if len(*request_body.Emails) == 0 {
 				return httpmock.NewStringResponse(400, missing_email_address_value), nil
@@ -137,14 +136,22 @@ func TestMockBulkValidationNoApiKey(t *testing.T) {
 	if error_ != nil {
 		t.Error(error_.Error())
 	}
-	if !assert.Len(t, bulk_response.EmailBatch, 0) { t.FailNow() }
-	if !assert.Len(t, bulk_response.Errors, 1)  { t.FailNow() }
+	if !assert.Len(t, bulk_response.EmailBatch, 0) {
+		t.FailNow()
+	}
+	if !assert.Len(t, bulk_response.Errors, 1) {
+		t.FailNow()
+	}
 	response_error := bulk_response.Errors[0]
-	if !assert.Equal(t,response_error.EmailAddress, "all") { t.FailNow() }
-	if !assert.Contains(t, response_error.Error, "Invalid API Key") { t.FailNow() }
+	if !assert.Equal(t, response_error.EmailAddress, "all") {
+		t.FailNow()
+	}
+	if !assert.Contains(t, response_error.Error, "Invalid API Key") {
+		t.FailNow()
+	}
 }
 
-func TestMockBulkValidationNoEmails(t *testing.T){
+func TestMockBulkValidationNoEmails(t *testing.T) {
 	SetApiKey("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
@@ -163,7 +170,9 @@ func TestMockBulkValidationValidAndErroneousMail(t *testing.T) {
 	response, error_ := ValidateBatch([]EmailToValidate{
 		{EmailAddress: "valid@example.com"}, {},
 	})
-	if !assert.Nil(t, error_) { t.FailNow() }
+	if !assert.Nil(t, error_) {
+		t.FailNow()
+	}
 	assert.Len(t, response.EmailBatch, 1)
 	assert.Len(t, response.Errors, 1)
 }

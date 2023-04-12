@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-
 func TestValidate(t *testing.T) {
 	ImportApiKeyFromEnvFile()
 	for _, e := range emailsToValidate {
