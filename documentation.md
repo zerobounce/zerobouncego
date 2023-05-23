@@ -1,9 +1,4 @@
-# Go ZeroBounce API
-Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounce.net/docs/email-validation-api-quickstart/).
-
-[Link to the original repo](https://github.com/antsanchez/gozerobounce)
-
-## Installation and Usage
+#### Installation and Usage
 ```sh
 go get github.com/zerobounce/zerobouncego
 ```
@@ -19,7 +14,7 @@ zerobouncego.ImportApiKeyFromEnvFile()
 zerobouncego.SetApiKey("mysecretapikey")
 ```
 
-## Generic API methods
+#### Generic API methods
 
 ```go
 package main
@@ -55,9 +50,9 @@ func main() {
 
 ```
 
-## Validation
+#### Validation
 
-#### 1. Single email validation
+###### 1. Single email validation
 
 ```go
 package main
@@ -92,7 +87,7 @@ func main() {
 }
 ```
 
-#### 2. Batch validation
+###### 2. Batch validation
 
 ```go
 package main
@@ -130,7 +125,7 @@ func main() {
 }
 ```
 
-#### 3. Bulk file validation
+###### 3. Bulk file validation
 
 ```go
 package main
@@ -239,7 +234,7 @@ Example export file:
 ```
 
 
-#### 4. AI scoring
+###### 4. AI scoring
 
 ```go
 package main
@@ -348,7 +343,7 @@ Example export file:
 ```
 
 
-## Testing
+#### Testing
 
 This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the ones ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
 
