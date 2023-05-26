@@ -53,7 +53,7 @@ func main() {
 
 #### Validación
 
-###### 1. Validación de un solo correo electrónico
+##### 1. Validación de un solo correo electrónico
 
 ```go
 package main
@@ -88,7 +88,7 @@ func main() {
 }
 ```
 
-###### 2. Validación en lote
+##### 2. Validación en lote
 
 ```go
 package main
@@ -128,7 +128,7 @@ go.EmailToValidate{
 }
 ```
 
-###### 3. Validación de archivos a granel
+##### 3. Validación de archivos a granel
 
 ```go
 package main
@@ -239,7 +239,7 @@ Ejemplo de archivo de exportación (CSV):
 ```
 
 
-###### 4. Puntuación de IA
+##### 4. Puntuación de IA
 
 ```go
 package main
