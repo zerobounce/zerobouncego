@@ -13,6 +13,8 @@ type DomainFormats struct {
 }
 
 // FindEmailResponse response structure for Find Email API
+// `Confidence` field possible values: low, medium, high, unknown, undetermined
+// (it is inconsistent as it can be either lowercase or uppercase)
 type FindEmailResponse struct {
 	Email				string			`json:"email"`
 	Domain				string			`json:"domain"`

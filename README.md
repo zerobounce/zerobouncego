@@ -62,7 +62,7 @@ The ZeroBounce API has various operations support bulk csv files. The submission
 2. require stating the indexes of the required and optional columns in uploaded file
 3. support other optional parameters (remove duplicates, static if headers exits)
 
-The `CsvFile` struct is meant to include contents of the csv file and describe it.
+The `CsvFile` struct is meant to include contents of the csv file and to describe its layout (which content corresponds to each column).
 
 ## Validation
 

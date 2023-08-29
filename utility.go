@@ -87,14 +87,6 @@ const (
 	SS_TOXIC                       = "toxic"
 )
 
-// values for `FindEmailResponse.Confidence`
-const (
-	CONFIDENCE_LOW			= "LOW"
-	CONFIDENCE_MEDIUM		= "MEDIUM"
-	CONFIDENCE_HIGH			= "HIGH"
-	CONFIDENCE_UNKNOWN		= "UNKNOWN"
-	CONFIDENCE_UNDETERMINED	= "UNDETERMINED"
-)
 
 // APIResponse basis for api responses
 type APIResponse interface{}
