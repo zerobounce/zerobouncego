@@ -17,22 +17,31 @@ import (
 // CONSTANTS
 
 const (
-	URI                     = `https://api.zerobounce.net/v2/`
-	BULK_URI                = `https://bulkapi.zerobounce.net/v2/`
-	ENDPOINT_CREDITS        = "/getcredits"
-	ENDPOINT_ACTIVITY_DATA  = "/activity"
-	ENDPOINT_VALIDATE       = "/validate"
-	ENDPOINT_API_USAGE      = "/getapiusage"
-	ENDPOINT_BATCH_VALIDATE = "/validatebatch"
-	ENDPOINT_FILE_SEND      = "/sendfile"
-	ENDPOINT_FILE_STATUS    = "/filestatus"
-	ENDPOINT_FILE_RESULT    = "/getfile" // Content-type: application/octet-stream
-	ENDPOINT_FILE_DELETE    = "/deletefile"
-	ENDPOINT_SCORING_SEND   = "/scoring/sendfile"
-	ENDPOINT_SCORING_STATUS = "/scoring/filestatus"
-	ENDPOINT_SCORING_RESULT = "/scoring/getfile" // Content-type: application/octet-stream
-	ENDPOINT_SCORING_DELETE = "/scoring/deletefile"
-	SANDBOX_IP              = "99.110.204.1"
+	URI                     		= `https://api.zerobounce.net/v2/`
+	BULK_URI                		= `https://bulkapi.zerobounce.net/v2/`
+	ENDPOINT_CREDITS        		= "/getcredits"
+	ENDPOINT_ACTIVITY_DATA  		= "/activity"
+	ENDPOINT_VALIDATE       		= "/validate"
+	ENDPOINT_API_USAGE      		= "/getapiusage"
+	ENDPOINT_BATCH_VALIDATE 		= "/validatebatch"
+	ENDPOINT_FILE_SEND      		= "/sendfile"
+	ENDPOINT_FILE_STATUS    		= "/filestatus"
+	ENDPOINT_FILE_RESULT    		= "/getfile" // Content-type: application/octet-stream
+	ENDPOINT_FILE_DELETE    		= "/deletefile"
+	ENDPOINT_SCORING_SEND   		= "/scoring/sendfile"
+	ENDPOINT_SCORING_STATUS 		= "/scoring/filestatus"
+	ENDPOINT_SCORING_RESULT 		= "/scoring/getfile" // Content-type: application/octet-stream
+	ENDPOINT_SCORING_DELETE 		= "/scoring/deletefile"
+	ENDPOINT_EMAIL_FINDER 			= "/guessformat"
+	ENDPOINT_EMAIL_FINDER_SEND 		= "/email-finder/sendfile"
+	ENDPOINT_EMAIL_FINDER_STATUS 	= "/email-finder/filestatus"
+	ENDPOINT_EMAIL_FINDER_RESULT 	= "/email-finder/getfile" // Content-type: application/octet-stream
+	ENDPOINT_EMAIL_FINDER_DELETE 	= "/email-finder/deletefile"
+	ENDPOINT_DOMAIN_SEARCH_SEND 	= "/domain-search/sendfile"
+	ENDPOINT_DOMAIN_SEARCH_STATUS 	= "/domain-search/filestatus"
+	ENDPOINT_DOMAIN_SEARCH_RESULT 	= "/domain-search/getfile" // Content-type: application/octet-stream
+	ENDPOINT_DOMAIN_SEARCH_DELETE 	= "/domain-search/deletefile"
+	SANDBOX_IP              		= "99.110.204.1"
 )
 
 const (
@@ -76,6 +85,15 @@ const (
 	SS_ROLE_BASED_CATCH_ALL        = "role_based_catch_all"
 	SS_DISPOSABLE                  = "disposable"
 	SS_TOXIC                       = "toxic"
+)
+
+// values for `FindEmailResponse.Confidence`
+const (
+	CONFIDENCE_LOW			= "LOW"
+	CONFIDENCE_MEDIUM		= "MEDIUM"
+	CONFIDENCE_HIGH			= "HIGH"
+	CONFIDENCE_UNKNOWN		= "UNKNOWN"
+	CONFIDENCE_UNDETERMINED	= "UNDETERMINED"
 )
 
 // APIResponse basis for api responses

@@ -3,7 +3,13 @@ package zerobouncego
 import "io"
 
 // BulkValidationSubmit - submit a file with emails for validation
+// Required columns: EmailAddressColumn
+// Optional columns: FirstNameColumn, LastNameColumn, GenderColumn, IpAddressColumn
 func BulkValidationSubmit(csv_file CsvFile, remove_duplicate bool) (*FileValidationResponse, error) {
+	if csv_file.ColumnsNotSet() {
+		// if no column is set, fallback the required column to index 1
+		csv_file.EmailAddressColumn = 1
+	}
 	return GenericFileSubmit(csv_file, remove_duplicate, ENDPOINT_FILE_SEND)
 }
 

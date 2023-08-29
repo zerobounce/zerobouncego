@@ -55,6 +55,15 @@ func main() {
 
 ```
 
+## Bulk operations
+
+The ZeroBounce API has various operations support bulk csv files. The submission endpoints follow the following rules:
+1. require the actual file
+2. require stating the indexes of the required and optional columns in uploaded file
+3. support other optional parameters (remove duplicates, static if headers exits)
+
+The `CsvFile` struct is meant to include contents of the csv file and describe it.
+
 ## Validation
 
 #### 1. Single email validation

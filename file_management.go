@@ -20,7 +20,9 @@ const (
 	CONTENT_TYPE_JSON         = "application/json"
 )
 
-// CsvFile - used for bulk validations and AI scoring
+// CsvFile - used to upload csv file for bulk operations
+// each operation that uses `CsvFile`s has stated in the function's docstring
+// the required and optional columns that the API expects
 type CsvFile struct {
 	File         io.Reader `json:"file"`
 	FileName     string    `json:"file_name"`
@@ -29,22 +31,40 @@ type CsvFile struct {
 	// column index starts from 1
 	// if either of the following will be 0, will be excluded from the request
 	EmailAddressColumn int `json:"email_address_column"`
+	DomainColumn       int `json:"domain_column"`
 	FirstNameColumn    int `json:"first_name_column"`
+	MiddleNameColumn   int `json:"middle_name_column"`
 	LastNameColumn     int `json:"last_name_column"`
 	GenderColumn       int `json:"gender_column"`
 	IpAddressColumn    int `json:"ip_address_column"`
+}
+
+// ColumnsNotSet states whether none of the columns was set to a value
+func (c *CsvFile) ColumnsNotSet() bool {
+	return c.EmailAddressColumn == 0 &&
+		c.DomainColumn == 0 &&
+		c.FirstNameColumn == 0 &&
+		c.MiddleNameColumn == 0 &&
+		c.LastNameColumn == 0 &&
+		c.GenderColumn == 0 &&
+		c.IpAddressColumn == 0
 }
 
 // ColumnsMapping - function generating how columns-index mapping of the instance
 func (c *CsvFile) ColumnsMapping() map[string]int {
 	column_to_value := make(map[string]int)
 
-	// include this field regardless, as it's required
-	column_to_value["email_address_column"] = c.EmailAddressColumn
-
-	// populate optional values
+	if c.EmailAddressColumn != 0 {
+		column_to_value["email_address_column"] = c.EmailAddressColumn
+	}
+	if c.DomainColumn != 0 {
+		column_to_value["domain_column"] = c.DomainColumn
+	}
 	if c.FirstNameColumn != 0 {
 		column_to_value["first_name_column"] = c.FirstNameColumn
+	}
+	if c.MiddleNameColumn != 0 {
+		column_to_value["middle_name_column"] = c.MiddleNameColumn
 	}
 	if c.LastNameColumn != 0 {
 		column_to_value["last_name_column"] = c.LastNameColumn
