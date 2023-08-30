@@ -49,7 +49,7 @@ func TestFindEmail400Error(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 
 	mockBadRequestResponse("GET", ENDPOINT_EMAIL_FINDER)
-	_, error_ := FindEmail("John", "", "Doe", "example.com")
+	_, error_ := FindEmail("example.com", "John", "", "Doe")
 	if !assert.NotNil(t, error_) {
 		// expected not nil; fail otherwise
 		t.FailNow()
@@ -63,7 +63,7 @@ func TestFindEmail200Invalid(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 
 	mockOkResponse("GET", ENDPOINT_EMAIL_FINDER, MOCK_FIND_MAIL_INVALID)
-	response_object, error_ := FindEmail("John", "", "Doe", "example.com")
+	response_object, error_ := FindEmail("example.com", "John", "", "Doe")
 	if !assert.Nil(t, error_) {
 		// expected nil; fail otherwise
 		t.FailNow()
@@ -85,7 +85,7 @@ func TestFindEmail200Valid(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 
 	mockOkResponse("GET", ENDPOINT_EMAIL_FINDER, MOCK_FIND_MAIL_VALID)
-	response_object, error_ := FindEmail("John", "", "Doe", "example.com")
+	response_object, error_ := FindEmail("example.com", "John", "", "Doe")
 	if !assert.Nil(t, error_) {
 		// expected nil; fail otherwise
 		fmt.Print(error_.Error())

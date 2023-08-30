@@ -24,15 +24,22 @@ type FindEmailResponse struct {
 }
 
 // FindEmail uses parameters to provide valid business email
-func FindEmail(first_name, middle_name, last_name, domain string) (*FindEmailResponse, error) {
+func FindEmail(domain, first_name, middle_name, last_name string) (*FindEmailResponse, error) {
 	var error_ error
 	response := &FindEmailResponse{}
 
 	request_parameters := url.Values{}
-	request_parameters.Set("first_name", first_name)
-	request_parameters.Set("middle_name", middle_name)
-	request_parameters.Set("last_name", last_name)
 	request_parameters.Set("domain", domain)
+	if len(first_name) > 0 {
+		request_parameters.Set("first_name", first_name)
+	}
+	if len(middle_name) > 0 {
+		request_parameters.Set("middle_name", middle_name)
+	}
+	if len(last_name) > 0 {
+		request_parameters.Set("last_name", last_name)
+	}
+
 	url_to_request, error_ := PrepareURL(ENDPOINT_EMAIL_FINDER, request_parameters)
 	if error_ != nil {
 		return response, error_
@@ -44,5 +51,5 @@ func FindEmail(first_name, middle_name, last_name, domain string) (*FindEmailRes
 
 // DomainSearch - attempts to detect possible patterns a specific company uses
 func DomainSearch(domain string) (*FindEmailResponse, error) {
-	return FindEmail("", "", "", domain)
+	return FindEmail(domain, "", "", "")
 }

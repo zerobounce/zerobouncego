@@ -364,7 +364,7 @@ import (
 func main() {
 	zerobouncego.SetApiKey("... Your API KEY ...")
 
-	response, error_ := zerobouncego.FindEmail("John", "", "Doe", "example.com")
+	response, error_ := zerobouncego.FindEmail("example.com", "John", "", "Doe")
 	if error_ != nil {
 		fmt.Println(error_.Error())
 		return
