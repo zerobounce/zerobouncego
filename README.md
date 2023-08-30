@@ -357,6 +357,54 @@ Example export file:
 ```
 
 
+## Email Finder
+Email Finder allows you to search for new business email addresses using our proprietary technologies
+
+#### 1. Single Email finder
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego"
+)
+
+func main() {
+	zerobouncego.SetApiKey("... Your API KEY ...")
+
+	response, error_ := zerobouncego.FindEmail("John", "", "Doe", "example.com")
+	if error_ != nil {
+		fmt.Println(error_.Error())
+		return
+	}
+	fmt.Println(response)
+}
+```
+
+#### 2. Single domain finder
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego"
+)
+
+func main() {
+	zerobouncego.SetApiKey("... Your API KEY ...")
+	response, error_ := zerobouncego.DomainSearch("example.com")
+	if error_ != nil {
+		fmt.Println(error_.Error())
+		return
+	}
+	fmt.Println(response)
+}
+```
+
 ## Testing
 
 This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the ones ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
