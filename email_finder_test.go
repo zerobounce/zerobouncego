@@ -11,7 +11,7 @@ import (
 const (
 	MOCK_FIND_MAIL_INVALID = `{
 		"email": "",
-		"domain": "example.in",
+		"domain": "example.com",
 		"format": "unknown",
 		"status": "invalid",
 		"sub_status": "no_dns_entries",
@@ -71,7 +71,7 @@ func TestFindEmail200Invalid(t *testing.T) {
 	assert.Equal(t, "", response_object.Email)
 	assert.Equal(t, "", response_object.DidYouMean)
 	assert.Equal(t, "", response_object.FailureReason)
-	assert.Equal(t, "example.in", response_object.Domain)
+	assert.Equal(t, "example.com", response_object.Domain)
 	assert.Equal(t, "unknown", response_object.Format)
 	assert.Equal(t, "invalid", response_object.Status)
 	assert.Equal(t, "no_dns_entries", response_object.SubStatus)
@@ -145,7 +145,7 @@ func TestDomainSearch200Invalid(t *testing.T) {
 	assert.Equal(t, "", response_object.Email)
 	assert.Equal(t, "", response_object.DidYouMean)
 	assert.Equal(t, "", response_object.FailureReason)
-	assert.Equal(t, "example.in", response_object.Domain)
+	assert.Equal(t, "example.com", response_object.Domain)
 	assert.Equal(t, "unknown", response_object.Format)
 	assert.Equal(t, "invalid", response_object.Status)
 	assert.Equal(t, "no_dns_entries", response_object.SubStatus)
