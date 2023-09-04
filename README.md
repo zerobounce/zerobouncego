@@ -347,6 +347,53 @@ Example export file:
 
 ```
 
+## Email Finder
+Email Finder allows you to search for new business email addresses using our proprietary technologies
+
+#### 1. Single Email finder
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego"
+)
+
+func main() {
+	zerobouncego.SetApiKey("... Your API KEY ...")
+
+	response, error_ := zerobouncego.FindEmail("example.com", "John", "", "Doe")
+	if error_ != nil {
+		fmt.Println(error_.Error())
+		return
+	}
+	fmt.Println(response)
+}
+```
+
+#### 2. Single domain finder
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego"
+)
+
+func main() {
+	zerobouncego.SetApiKey("... Your API KEY ...")
+	response, error_ := zerobouncego.DomainSearch("example.com")
+	if error_ != nil {
+		fmt.Println(error_.Error())
+		return
+	}
+	fmt.Println(response)
+}
+```
 
 ## Testing
 

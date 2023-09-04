@@ -32,6 +32,7 @@ const (
 	ENDPOINT_SCORING_STATUS = "/scoring/filestatus"
 	ENDPOINT_SCORING_RESULT = "/scoring/getfile" // Content-type: application/octet-stream
 	ENDPOINT_SCORING_DELETE = "/scoring/deletefile"
+	ENDPOINT_EMAIL_FINDER	= "/guessformat"
 	SANDBOX_IP              = "99.110.204.1"
 )
 
