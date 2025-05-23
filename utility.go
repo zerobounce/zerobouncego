@@ -17,8 +17,6 @@ import (
 // CONSTANTS
 
 const (
-	URI                     = `https://api.zerobounce.net/v2/`
-	BULK_URI                = `https://bulkapi.zerobounce.net/v2/`
 	ENDPOINT_CREDITS        = "/getcredits"
 	ENDPOINT_ACTIVITY_DATA  = "/activity"
 	ENDPOINT_VALIDATE       = "/validate"
@@ -32,7 +30,7 @@ const (
 	ENDPOINT_SCORING_STATUS = "/scoring/filestatus"
 	ENDPOINT_SCORING_RESULT = "/scoring/getfile" // Content-type: application/octet-stream
 	ENDPOINT_SCORING_DELETE = "/scoring/deletefile"
-	ENDPOINT_EMAIL_FINDER	= "/guessformat"
+	ENDPOINT_EMAIL_FINDER   = "/guessformat"
 	SANDBOX_IP              = "99.110.204.1"
 )
 
@@ -82,10 +80,23 @@ const (
 // APIResponse basis for api responses
 type APIResponse interface{}
 
-// API_KEY the API key used in order to make the requests
-var API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
+var (
+	// API_KEY the API key used in order to make the requests
+	API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
+
+	URI      string = GetenvOrDefault("ZERO_BOUNCE_URI", "https://api.zerobounce.net/v2/")
+	BULK_URI string = GetenvOrDefault("ZERO_BOUNCE_BULK_URI", "https://bulkapi.zerobounce.net/v2/")
+)
 
 // FUNCTIONS
+
+// GetenvOrDefault reads an environment variable or returns a default value if the variable is not set.
+func GetenvOrDefault(variableName, defaultValue string) string {
+	if value, ok := os.LookupEnv(variableName); ok {
+		return value
+	}
+	return defaultValue
+}
 
 // SetApiKey set the API key explicitly
 func SetApiKey(new_api_key_value string) {
