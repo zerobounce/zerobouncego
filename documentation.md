@@ -7,7 +7,7 @@ This package uses the zero-bounce API which requires an API key. This key can be
 1. through an environment variable `ZERO_BOUNCE_API_KEY` (loaded automatically in code)
 2. through an .env file that contains `ZERO_BOUNCE_API_KEY` and then calling following method before usage:
 ```go
-zerobouncego.ImportApiKeyFromEnvFile()
+zerobouncego.LoadEnvFromFile()
 ```
 3. by settings explicitly in code, using the following method:
 ```go
@@ -250,7 +250,7 @@ import (
 
 func main() {
 	zerobouncego.SetApiKey("... Your API KEY ...")
-	zerobouncego.ImportApiKeyFromEnvFile()
+	zerobouncego.LoadEnvFromFile()
 	import_file_path := "./emails.csv"
 	result_file_path := "./validation_result.csv"
 

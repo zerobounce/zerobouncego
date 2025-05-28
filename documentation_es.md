@@ -9,7 +9,7 @@ Este paquete utiliza la API de ZeroBounce, la cual requiere una clave de API. Es
 1. A través de una variable de entorno `ZERO_BOUNCE_API_KEY` (cargada automáticamente en el código).
 2. A través de un archivo .env que contiene `ZERO_BOUNCE_API_KEY` y luego llamando al siguiente método antes de su uso:
    ```go
-   zerobouncego.ImportApiKeyFromEnvFile()
+   zerobouncego.LoadEnvFromFile()
    ```
 3. Estableciéndola explícitamente en el código utilizando el siguiente método:
    ```go
@@ -255,7 +255,7 @@ import (
 
 func main() {
 	zerobouncego.SetApiKey("... Tu clave de API ...")
-	zerobouncego.ImportApiKeyFromEnvFile()
+	zerobouncego.LoadEnvFromFile()
 	import_file_path := "./emails.csv"
 	result_file_path := "./validation_result.csv"
 

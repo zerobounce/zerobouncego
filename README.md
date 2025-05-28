@@ -12,7 +12,7 @@ This package uses the zero-bounce API which requires an API key. This key can be
 1. through an environment variable `ZERO_BOUNCE_API_KEY` (loaded automatically in code)
 2. through an .env file that contains `ZERO_BOUNCE_API_KEY` and then calling following method before usage:
 ```go
-zerobouncego.ImportApiKeyFromEnvFile()
+zerobouncego.LoadEnvFromFile()
 ```
 3. by settings explicitly in code, using the following method:
 ```go
@@ -21,7 +21,7 @@ zerobouncego.SetApiKey("mysecretapikey")
 
 ### Mocking / Other URI
 If you need to use a mock service in your tests or otherwise use a different URI you can:
-Set it in the .env file (and calling ImportApiKeyFromEnvFile):
+Set it in the .env file (and calling LoadEnvFromFile):
 ```bash
 ZERO_BOUNCE_URI=        # optional, defaults to the production URI
 ZERO_BOUNCE_BULK_URI=   # optional, defaults to the production bulk URI
@@ -268,7 +268,7 @@ import (
 
 func main() {
 	zerobouncego.SetApiKey("... Your API KEY ...")
-	zerobouncego.ImportApiKeyFromEnvFile()
+	zerobouncego.LoadEnvFromFile()
 	import_file_path := "./emails.csv"
 	result_file_path := "./validation_result.csv"
 

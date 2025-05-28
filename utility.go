@@ -114,9 +114,9 @@ func SetURI(new_uri string, new_bulk_uri string) {
 	}
 }
 
-// ImportApiKeyFromEnvFile provided that a .env file can be found where the
+// LoadEnvFromFile provided that a .env file can be found where the
 // program is running, load it, extract the API key and set it
-func ImportApiKeyFromEnvFile() bool {
+func LoadEnvFromFile() bool {
 	error_ := godotenv.Load(".env")
 	if error_ != nil {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
