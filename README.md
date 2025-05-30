@@ -12,11 +12,24 @@ This package uses the zero-bounce API which requires an API key. This key can be
 1. through an environment variable `ZERO_BOUNCE_API_KEY` (loaded automatically in code)
 2. through an .env file that contains `ZERO_BOUNCE_API_KEY` and then calling following method before usage:
 ```go
-zerobouncego.ImportApiKeyFromEnvFile()
+zerobouncego.LoadEnvFromFile()
 ```
 3. by settings explicitly in code, using the following method:
 ```go
 zerobouncego.SetApiKey("mysecretapikey")
+```
+
+### Mocking / Other URI
+If you need to use a mock service in your tests or otherwise use a different URI you can:
+Set it in the .env file (and calling LoadEnvFromFile):
+```bash
+ZERO_BOUNCE_URI=        # optional, defaults to the production URI
+ZERO_BOUNCE_BULK_URI=   # optional, defaults to the production bulk URI
+```
+
+Call the setter function (passing empty strings will keep current values):
+```go
+zerobouncego.SetURI(new_uri, new_bulk_uri)
 ```
 
 ## Generic API methods
@@ -255,7 +268,7 @@ import (
 
 func main() {
 	zerobouncego.SetApiKey("... Your API KEY ...")
-	zerobouncego.ImportApiKeyFromEnvFile()
+	zerobouncego.LoadEnvFromFile()
 	import_file_path := "./emails.csv"
 	result_file_path := "./validation_result.csv"
 
@@ -402,7 +415,7 @@ This package contains both unit tests and integration tests (which are excluded 
 In order to run the integration tests:
 - set appropriate `ZERO_BOUNCE_API_KEY` environment variable
 - rename all "_integration_t.go" into "_integration_test.go"
-- run either individual or all tests (`go test .`)
+- run either individual or all tests (`go test . -v`)
 
 NOTE: currently, the unit tests can be updated such that, by removing the mocking and explicit API key setting, they should work as integration tests as well AS LONG AS a valid API key is provided via environment
 

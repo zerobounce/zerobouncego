@@ -5,7 +5,7 @@ import (
 )
 
 func TestValidate(t *testing.T) {
-	ImportApiKeyFromEnvFile()
+	LoadEnvFromFile()
 	for _, e := range emailsToValidate {
 
 		r, err := Validate(e.Email, SANDBOX_IP)

@@ -15,10 +15,7 @@ import (
 )
 
 // CONSTANTS
-
 const (
-	URI                     = `https://api.zerobounce.net/v2/`
-	BULK_URI                = `https://bulkapi.zerobounce.net/v2/`
 	ENDPOINT_CREDITS        = "/getcredits"
 	ENDPOINT_ACTIVITY_DATA  = "/activity"
 	ENDPOINT_VALIDATE       = "/validate"
@@ -32,7 +29,7 @@ const (
 	ENDPOINT_SCORING_STATUS = "/scoring/filestatus"
 	ENDPOINT_SCORING_RESULT = "/scoring/getfile" // Content-type: application/octet-stream
 	ENDPOINT_SCORING_DELETE = "/scoring/deletefile"
-	ENDPOINT_EMAIL_FINDER	= "/guessformat"
+	ENDPOINT_EMAIL_FINDER   = "/guessformat"
 	SANDBOX_IP              = "99.110.204.1"
 )
 
@@ -82,8 +79,23 @@ const (
 // APIResponse basis for api responses
 type APIResponse interface{}
 
-// API_KEY the API key used in order to make the requests
-var API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
+func Getenv(key, fallback string) string {
+	value := os.Getenv(key)
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+// VAR
+var (
+	// URI used to make requests to the ZeroBounce API
+	URI      = Getenv(`ZERO_BOUNCE_URI`, `https://api.zerobounce.net/v2/`)
+	BULK_URI = Getenv(`ZERO_BOUNCE_BULK_URI`, `https://bulkapi.zerobounce.net/v2/`)
+
+	// API_KEY the API key used in order to make the requests
+	API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
+)
 
 // FUNCTIONS
 
@@ -92,15 +104,26 @@ func SetApiKey(new_api_key_value string) {
 	API_KEY = new_api_key_value
 }
 
-// ImportApiKeyFromEnvFile provided that a .env file can be found where the
+// Update URI, BULK_URI or both (will not be updated if empty strings are passed)
+func SetURI(new_uri string, new_bulk_uri string) {
+	if new_uri != "" {
+		URI = new_uri
+	}
+	if new_bulk_uri != "" {
+		BULK_URI = new_bulk_uri
+	}
+}
+
+// LoadEnvFromFile provided that a .env file can be found where the
 // program is running, load it, extract the API key and set it
-func ImportApiKeyFromEnvFile() bool {
+func LoadEnvFromFile() bool {
 	error_ := godotenv.Load(".env")
 	if error_ != nil {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
 		return false
 	}
 	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
+	SetURI(os.Getenv("ZERO_BOUNCE_URI"), os.Getenv("ZERO_BOUNCE_BULK_URI"))
 	return true
 }
 
