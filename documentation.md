@@ -9,9 +9,9 @@ This package uses the zero-bounce API which requires an API key. This key can be
 ```go
 zerobouncego.LoadEnvFromFile()
 ```
-3. by settings explicitly in code, using the following method:
+3. by settings explicitly in code, using the following method, where a preferred URI can also be provided:
 ```go
-zerobouncego.SetApiKey("mysecretapikey")
+zerobouncego.InitializeWithURI("mysecretapikey", ZB_API_URL_DEFAULT)
 ```
 
 #### Generic API methods
@@ -27,7 +27,7 @@ import (
 )
 
 func main() {
-	zerobouncego.SetApiKey("... Your API KEY ...")
+	zerobouncego.Initialize("... Your API KEY ...")
 
 	// Check your account's credits
 	credits, error_ := zerobouncego.GetCredits()
@@ -99,7 +99,7 @@ import (
 )
 
 func main() {
-	zerobouncego.SetApiKey("... Your API KEY ...")
+	zerobouncego.Initialize("... Your API KEY ...")
 
 	emails_to_validate := []zerobouncego.EmailToValidate{
 		{EmailAddress: "disposable@example.com", IPAddress: "99.110.204.1"},
@@ -140,7 +140,7 @@ import (
 
 
 func main() {
-	zerobouncego.SetApiKey("... Your API KEY ...")
+	zerobouncego.Initialize("... Your API KEY ...")
 	import_file_path := "PATH_TO_CSV_TO_IMPORT"
 	result_file_path := "PATH_TO_CSV_TO_EXPORT"
 
@@ -249,7 +249,7 @@ import (
 
 
 func main() {
-	zerobouncego.SetApiKey("... Your API KEY ...")
+	zerobouncego.Initialize("... Your API KEY ...")
 	zerobouncego.LoadEnvFromFile()
 	import_file_path := "./emails.csv"
 	result_file_path := "./validation_result.csv"

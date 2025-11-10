@@ -14,6 +14,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type ZbApiURL int
+
 // CONSTANTS
 const (
 	ENDPOINT_CREDITS        = "/getcredits"
@@ -74,6 +76,13 @@ const (
 	SS_ROLE_BASED_CATCH_ALL        = "role_based_catch_all"
 	SS_DISPOSABLE                  = "disposable"
 	SS_TOXIC                       = "toxic"
+	SS_ACCEPT_ALL				   = "accept_all"
+)
+
+const (
+	ZB_API_URL_DEFAULT ZbApiURL = iota
+	ZB_API_URL_USA
+	ZB_API_URL_EU
 )
 
 // APIResponse basis for api responses
@@ -95,11 +104,31 @@ var (
 
 	// API_KEY the API key used in order to make the requests
 	API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
+
+	zbApiURLValue = map[ZbApiURL]string{
+		ZB_API_URL_DEFAULT:		"https://api.zerobounce.net/v2/",
+		ZB_API_URL_USA:			"https://api-us.zerobounce.net/v2/",
+		ZB_API_URL_EU:			"https://api-eu.zerobounce.net/v2/",
+	}
 )
 
 // FUNCTIONS
 
+// Initialize the API key explicitly
+func Initialize(new_api_key_value string) {
+	API_KEY = new_api_key_value
+	URI = zbApiURLValue[ZB_API_URL_DEFAULT]
+}
+
+// Initialize the API key and the URI explicitly
+func InitializeWithURI(new_api_key_value string, zbApiURL ZbApiURL) {
+	API_KEY = new_api_key_value
+	URI = zbApiURLValue[zbApiURL]
+}
+
 // SetApiKey set the API key explicitly
+//
+// Deprecated: Use Initialize methods
 func SetApiKey(new_api_key_value string) {
 	API_KEY = new_api_key_value
 }
@@ -122,7 +151,7 @@ func LoadEnvFromFile() bool {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
 		return false
 	}
-	SetApiKey(os.Getenv("ZERO_BOUNCE_API_KEY"))
+	Initialize(os.Getenv("ZERO_BOUNCE_API_KEY"))
 	SetURI(os.Getenv("ZERO_BOUNCE_URI"), os.Getenv("ZERO_BOUNCE_BULK_URI"))
 	return true
 }

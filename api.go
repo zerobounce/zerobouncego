@@ -112,6 +112,8 @@ type ApiUsageResponse struct {
 	SubStatusForcibleDisconnect int `json:"sub_status_forcible_disconnect"`
 	// Total failed SMTP connections the API has a sub status of "failed_smtp_connection"
 	SubStatusFailedSmtpConnection int `json:"sub_status_failed_smtp_connection"`
+	// Total number of times the API has a sub status of "accept_all"
+	SubStatusAcceptAll int `json:"sub_status_accept_all"`
 	// Total number times the API has a sub status "mx_forward"
 	SubStatusMxForward int `json:"sub_status_mx_forward"`
 	// Start date of query.

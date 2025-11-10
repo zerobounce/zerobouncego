@@ -99,7 +99,7 @@ func mockBatchValidateRequest() {
 }
 
 func TestMockValidationNoApiKeySet(t *testing.T) {
-	SetApiKey("")
+	Initialize("")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockValidateRequest()
@@ -111,7 +111,7 @@ func TestMockValidationNoApiKeySet(t *testing.T) {
 
 // TestMockValidation test the `Validate` function on each example email
 func TestMockValidationOk(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockValidateRequest()
@@ -125,7 +125,7 @@ func TestMockValidationOk(t *testing.T) {
 }
 
 func TestMockBulkValidationNoApiKey(t *testing.T) {
-	SetApiKey("")
+	Initialize("")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockBatchValidateRequest()
@@ -150,7 +150,7 @@ func TestMockBulkValidationNoApiKey(t *testing.T) {
 }
 
 func TestMockBulkValidationNoEmails(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockBatchValidateRequest()
@@ -160,7 +160,7 @@ func TestMockBulkValidationNoEmails(t *testing.T) {
 }
 
 func TestMockBulkValidationValidAndErroneousMail(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockBatchValidateRequest()
@@ -177,7 +177,7 @@ func TestMockBulkValidationValidAndErroneousMail(t *testing.T) {
 
 // TestMockValidation test the `ValidateBatch` function on all example emails
 func TestMockBulkValidationOk(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockBatchValidateRequest()

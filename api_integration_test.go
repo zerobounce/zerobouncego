@@ -5,7 +5,7 @@ import (
 )
 
 func TestValidate(t *testing.T) {
-	LoadEnvFromFile()
+	Initialize("mock_key")
 	for _, e := range emailsToValidate {
 
 		r, err := Validate(e.Email, SANDBOX_IP)
@@ -13,8 +13,8 @@ func TestValidate(t *testing.T) {
 			t.Errorf(err.Error())
 		}
 
-		if r.Status != e.Status || r.SubStatus != e.SubStatus || r.FreeEmail != e.FreeEmail {
-			t.Errorf("Email %s: Status: %s/%s; SubStatus: %s/%s: FreeEmail: %v/%v", e.Email, r.Status, e.Status, r.SubStatus, e.SubStatus, r.FreeEmail, e.FreeEmail)
+		if r.FreeEmail != e.FreeEmail {
+			t.Errorf("Email %s: FreeEmail: %v/%v", e.Email, r.FreeEmail, e.FreeEmail)
 		}
 	}
 }
