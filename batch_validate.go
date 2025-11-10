@@ -47,7 +47,7 @@ func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error)
 	request_payload := strings.NewReader(request_payload_builder.String())
 
 	// actual request
-	url_to_access, error_ := url.JoinPath(URI, ENDPOINT_BATCH_VALIDATE)
+	url_to_access, error_ := url.JoinPath(BULK_URI, ENDPOINT_BATCH_VALIDATE)
 	if error_ != nil {
 		return *response_object, fmt.Errorf("invalid URL (%s) or endpoint (%s) value", URI, ENDPOINT_BATCH_VALIDATE)
 	}

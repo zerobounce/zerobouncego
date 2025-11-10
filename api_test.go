@@ -40,6 +40,7 @@ const MOCK_API_USAGE = `{
     "sub_status_mailbox_quota_exceeded": 10,
     "sub_status_forcible_disconnect": 10,
     "sub_status_failed_smtp_connection": 10,
+    "sub_status_accept_all": 10,
     "sub_status_mx_forward": 10,
     "sub_status_alternate": 10,
     "sub_status_blocked": 10,
@@ -73,7 +74,7 @@ func mockApiUsageRequest() {
 }
 
 func TestCreditsNoKey(t *testing.T) {
-	SetApiKey("")
+	Initialize("")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockCreditsRequest()
@@ -86,7 +87,7 @@ func TestCreditsNoKey(t *testing.T) {
 }
 
 func TestCreditsOk(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockCreditsRequest()
@@ -99,7 +100,7 @@ func TestCreditsOk(t *testing.T) {
 }
 
 func TestApiUsageNoKey(t *testing.T) {
-	SetApiKey("")
+	Initialize("")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockApiUsageRequest()
@@ -112,7 +113,7 @@ func TestApiUsageNoKey(t *testing.T) {
 }
 
 func TestApiUsageOk(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockApiUsageRequest()
@@ -151,6 +152,7 @@ func TestApiUsageOk(t *testing.T) {
 	assert.NotEqual(t, api_usage.SubStatusMailboxQuotaExceeded, 0)
 	assert.NotEqual(t, api_usage.SubStatusForcibleDisconnect, 0)
 	assert.NotEqual(t, api_usage.SubStatusFailedSmtpConnection, 0)
+	assert.NotEqual(t, api_usage.SubStatusAcceptAll, 0)
 	assert.NotEqual(t, api_usage.SubStatusMxForward, 0)
 
 	expected_start := time.Date(2023, 1, 1, 0, 0, 0, 0, time.Local)

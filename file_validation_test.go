@@ -69,7 +69,7 @@ func handleMockedBulkValidate(request *http.Request) (*http.Response, error) {
 // TestEnsureParametersArePassedToRequest - ensure that a configured `CsvFile`
 // instance has all its parameters passed to the request
 func TestAllParametersArePassedToRequest(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -151,7 +151,7 @@ func TestAllParametersArePassedToRequest(t *testing.T) {
 }
 
 func TestSomeParametersArePassedToRequest(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -230,7 +230,7 @@ func TestSomeParametersArePassedToRequest(t *testing.T) {
 
 // TestBulkValidateSubmit400Error - bad request returned as response
 func TestBulkValidateSubmit400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
@@ -256,7 +256,7 @@ func TestBulkValidateSubmit400Error(t *testing.T) {
 
 // TestBulkValidateSubmit200Success - process expected to go accordingly
 func TestBulkValidateSubmit200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
@@ -288,7 +288,7 @@ func TestBulkValidateSubmit200Success(t *testing.T) {
 
 // TestBulkValidateSubmitLibraryError - error returned by http library
 func TestBulkValidateSubmitLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -306,7 +306,7 @@ func TestBulkValidateSubmitLibraryError(t *testing.T) {
 
 // TestBulkValidateSubmit200NotSuccess - error encountered but not a bad request
 func TestBulkValidateSubmit200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -323,7 +323,7 @@ func TestBulkValidateSubmit200NotSuccess(t *testing.T) {
 
 // TestBulkValidateStatusLibraryError - error returned by http library
 func TestBulkValidateStatusLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -342,7 +342,7 @@ func TestBulkValidateStatusLibraryError(t *testing.T) {
 
 // TestBulkValidateStatus400Error - bad request returned as response
 func TestBulkValidateStatus400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -360,7 +360,7 @@ func TestBulkValidateStatus400Error(t *testing.T) {
 
 // TestBulkValidateStatus200NotSuccess - error encountered but not a bad request (invalid)
 func TestBulkValidateStatus200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -382,7 +382,7 @@ func TestBulkValidateStatus200NotSuccess(t *testing.T) {
 
 // TestBulkValidateStatus200Success - process expected to go accordingly
 func TestBulkValidateStatus200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -419,7 +419,7 @@ func TestBulkValidateStatus200Success(t *testing.T) {
 
 // TestBulkValidateDeleteLibraryError - error returned by http library
 func TestBulkValidateDeleteLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -438,7 +438,7 @@ func TestBulkValidateDeleteLibraryError(t *testing.T) {
 
 // TestBulkValidateDelete400Error - bad request returned as response
 func TestBulkValidateDelete400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -457,7 +457,7 @@ func TestBulkValidateDelete400Error(t *testing.T) {
 
 // TestBulkValidateDelete200NotSuccess - error encountered but not a bad request (invalid)
 func TestBulkValidateDelete200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -472,7 +472,7 @@ func TestBulkValidateDelete200NotSuccess(t *testing.T) {
 
 // TestBulkValidateDelete200Success - process expected to go accordingly
 func TestBulkValidateDelete200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -487,7 +487,7 @@ func TestBulkValidateDelete200Success(t *testing.T) {
 
 // TestBulkValidateResultLibraryError - error returned by http library
 func TestBulkValidateResultLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}
@@ -506,7 +506,7 @@ func TestBulkValidateResultLibraryError(t *testing.T) {
 
 // TestBulkValidateResult400Error - bad request returned as response
 func TestBulkValidateResult400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}
@@ -525,7 +525,7 @@ func TestBulkValidateResult400Error(t *testing.T) {
 
 // TestBulkValidateResult200NotSuccess - error encountered but not a bad request (invalid)
 func TestBulkValidateResult200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}
@@ -540,7 +540,7 @@ func TestBulkValidateResult200NotSuccess(t *testing.T) {
 
 // TestBulkValidateResult200Success - process expected to go accordingly
 func TestBulkValidateResult200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}

@@ -54,7 +54,7 @@ func mockActivityDataResponses() {
 }
 
 func TestActivityDataError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockActivityDataResponses()
@@ -68,7 +68,7 @@ func TestActivityDataError(t *testing.T) {
 }
 
 func TestActivityDataNotFound(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockActivityDataResponses()
@@ -84,7 +84,7 @@ func TestActivityDataNotFound(t *testing.T) {
 }
 
 func TestActivityDataFound(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	mockActivityDataResponses()

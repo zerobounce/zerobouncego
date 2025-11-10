@@ -62,7 +62,7 @@ const (
 // TestScoringSubmitEnsureParametersSubmit - ensure that a configured `CsvFile`
 // instance has all its parameters passed to the request
 func TestScoringSubmitEnsureParametersSubmit(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -128,7 +128,7 @@ func TestScoringSubmitEnsureParametersSubmit(t *testing.T) {
 
 // TestScoringSubmitLibraryError - error returned by http library
 func TestScoringSubmitLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -146,7 +146,7 @@ func TestScoringSubmitLibraryError(t *testing.T) {
 
 // TestScoringSubmit400Error - bad request returned as response
 func TestScoringSubmit400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -164,7 +164,7 @@ func TestScoringSubmit400Error(t *testing.T) {
 
 // TestScoringSubmit200NotSuccess - error encountered but not a bad request
 func TestScoringSubmit200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -181,7 +181,7 @@ func TestScoringSubmit200NotSuccess(t *testing.T) {
 
 // TestScoringSubmit200Success - process expected to go accordingly
 func TestScoringSubmit200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -205,7 +205,7 @@ func TestScoringSubmit200Success(t *testing.T) {
 
 // TestScoringStatusLibraryError - error returned by http library
 func TestScoringStatusLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -224,7 +224,7 @@ func TestScoringStatusLibraryError(t *testing.T) {
 
 // TestScoringStatus400Error - bad request returned as response
 func TestScoringStatus400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -242,7 +242,7 @@ func TestScoringStatus400Error(t *testing.T) {
 
 // TestScoringStatus200NotSuccess - error encountered but not a bad request (invalid)
 func TestScoringStatus200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -264,7 +264,7 @@ func TestScoringStatus200NotSuccess(t *testing.T) {
 
 // TestScoringStatus200Success - process expected to go accordingly
 func TestScoringStatus200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -301,7 +301,7 @@ func TestScoringStatus200Success(t *testing.T) {
 
 // TestScoringDeleteLibraryError - error returned by http library
 func TestScoringDeleteLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -320,7 +320,7 @@ func TestScoringDeleteLibraryError(t *testing.T) {
 
 // TestScoringDelete400Error - bad request returned as response
 func TestScoringDelete400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -339,7 +339,7 @@ func TestScoringDelete400Error(t *testing.T) {
 
 // TestScoringDelete200NotSuccess - error encountered but not a bad request (invalid)
 func TestScoringDelete200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -354,7 +354,7 @@ func TestScoringDelete200NotSuccess(t *testing.T) {
 
 // TestScoringDelete200Success - process expected to go accordingly
 func TestScoringDelete200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -369,7 +369,7 @@ func TestScoringDelete200Success(t *testing.T) {
 
 // TestScoringResultLibraryError - error returned by http library
 func TestScoringResultLibraryError(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}
@@ -388,7 +388,7 @@ func TestScoringResultLibraryError(t *testing.T) {
 
 // TestScoringResult400Error - bad request returned as response
 func TestScoringResult400Error(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}
@@ -407,7 +407,7 @@ func TestScoringResult400Error(t *testing.T) {
 
 // TestScoringResult200NotSuccess - error encountered but not a bad request (invalid)
 func TestScoringResult200NotSuccess(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}
@@ -422,7 +422,7 @@ func TestScoringResult200NotSuccess(t *testing.T) {
 
 // TestScoringResult200Success - process expected to go accordingly
 func TestScoringResult200Success(t *testing.T) {
-	SetApiKey("mock_key")
+	Initialize("mock_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	string_builder := &strings.Builder{}
