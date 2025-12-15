@@ -8,7 +8,10 @@ func TestValidate(t *testing.T) {
 	Initialize("mock_key")
 	for _, e := range emailsToValidate {
 
-		r, err := Validate(e.Email, SANDBOX_IP)
+		r, err := Validate(e.Email, SANDBOX_IP, func() *string {
+			v := "10" // timeout seconds
+			return &v
+		}())
 		if err != nil {
 			t.Errorf(err.Error())
 		}
