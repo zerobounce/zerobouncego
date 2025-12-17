@@ -87,7 +87,9 @@ func main() {
 
 	// For Querying a single E-Mail and IP
 	// IP can also be an empty string
+	// Timeout can also be specified
 	response, error_ := zerobouncego.Validate("possible_typo@example.com", "123.123.123.123")
+	timeoutResponse, timeoutError_ := zerobouncego.ValidateWithTimeout("possible_typo@example.com", "123.123.123.123", "10")
 
 	if error_ != nil {
 		fmt.Println("error occurred: ", error_.Error())

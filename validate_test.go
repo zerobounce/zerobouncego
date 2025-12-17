@@ -104,7 +104,7 @@ func TestMockValidationNoApiKeySet(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 	mockValidateRequest()
 
-	_, error_ := Validate("valid@example.com", SANDBOX_IP)
+	_, error_ := ValidateWithTimeout("valid@example.com", SANDBOX_IP, "10")
 	assert.NotNil(t, error_)
 	assert.Contains(t, error_.Error(), "api_key")
 }
@@ -117,7 +117,7 @@ func TestMockValidationOk(t *testing.T) {
 	mockValidateRequest()
 
 	for _, test_case := range emailsToValidate {
-		email_response, error_ := Validate(test_case.Email, SANDBOX_IP)
+		email_response, error_ := ValidateWithTimeout(test_case.Email, SANDBOX_IP, "10")
 		assert.Nil(t, error_)
 		assert.Equalf(t, test_case.Status, email_response.Status, "failed for email %s", email_response.Address)
 		assert.Equalf(t, test_case.SubStatus, email_response.SubStatus, "failed for email %s", email_response.Address)

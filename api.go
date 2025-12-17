@@ -134,11 +134,17 @@ func (v ApiUsageResponse) EndDate() (time.Time, error) {
 
 // Validate validates a single email
 func Validate(email string, IPAddress string) (*ValidateResponse, error) {
+	return ValidateWithTimeout(email, IPAddress, "")
+}
 
+func ValidateWithTimeout(email string, IPAddress string, timeout string) (*ValidateResponse, error) {
 	// Prepare the parameters
 	params := url.Values{}
 	params.Set("email", email)
 	params.Set("ip_address", IPAddress)
+	if timeout != "" {
+		params.Set("timeout", timeout)
+	}
 
 	response := &ValidateResponse{}
 
