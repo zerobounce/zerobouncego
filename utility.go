@@ -76,7 +76,8 @@ const (
 	SS_ROLE_BASED_CATCH_ALL        = "role_based_catch_all"
 	SS_DISPOSABLE                  = "disposable"
 	SS_TOXIC                       = "toxic"
-	SS_ACCEPT_ALL				   = "accept_all"
+	SS_ACCEPT_ALL                  = "accept_all"
+	SS_MX_FORWARD                  = "mx_forward"
 )
 
 const (
@@ -106,9 +107,9 @@ var (
 	API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
 
 	zbApiURLValue = map[ZbApiURL]string{
-		ZB_API_URL_DEFAULT:		"https://api.zerobounce.net/v2/",
-		ZB_API_URL_USA:			"https://api-us.zerobounce.net/v2/",
-		ZB_API_URL_EU:			"https://api-eu.zerobounce.net/v2/",
+		ZB_API_URL_DEFAULT: "https://api.zerobounce.net/v2/",
+		ZB_API_URL_USA:     "https://api-us.zerobounce.net/v2/",
+		ZB_API_URL_EU:      "https://api-eu.zerobounce.net/v2/",
 	}
 )
 
