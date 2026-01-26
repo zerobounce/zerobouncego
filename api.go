@@ -116,6 +116,14 @@ type ApiUsageResponse struct {
 	SubStatusAcceptAll int `json:"sub_status_accept_all"`
 	// Total number times the API has a sub status "mx_forward"
 	SubStatusMxForward int `json:"sub_status_mx_forward"`
+	// Total number of times the API has a sub status of "alternate"
+	SubStatusAlternate int `json:"sub_status_alternate"`
+	// Total number of times the API has a sub status of "blocked"
+	SubStatusBlocked int `json:"sub_status_blocked"`
+	// Total number of times the API has a sub status of "allowed"
+	SubStatusAllowed int `json:"sub_status_allowed"`
+	// Total number of times the API has a sub status of "gold"
+	SubStatusGold int `json:"sub_status_gold"`
 	// Start date of query.
 	RawStartDate string `json:"start_date"`
 	// End date of query.

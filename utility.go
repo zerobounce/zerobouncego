@@ -74,9 +74,15 @@ const (
 	SS_DOES_NOT_ACCEPT_MAIL        = "does_not_accept_mail"
 	SS_ALIAS_ADDRESS               = "alias_address"
 	SS_ROLE_BASED_CATCH_ALL        = "role_based_catch_all"
+	SS_ROLE_BASED_ACCEPT_ALL       = "role_based_accept_all"
 	SS_DISPOSABLE                  = "disposable"
 	SS_TOXIC                       = "toxic"
 	SS_ACCEPT_ALL				   = "accept_all"
+	SS_ALTERNATE                   = "alternate"
+	SS_MX_FORWARD                  = "mx_forward"
+	SS_BLOCKED                     = "blocked"
+	SS_ALLOWED                     = "allowed"
+	SS_GOLD                        = "gold"
 )
 
 const (
@@ -274,6 +280,8 @@ var emailsToValidate = []SingleTest{
 	{Email: "timeout_exceeded@example.com", Status: "unknown", SubStatus: "timeout_exceeded"},
 	{Email: "unroutable_ip_address@example.com", Status: "invalid", SubStatus: "unroutable_ip_address"},
 	{Email: "free_email@example.com", Status: "valid", SubStatus: "", FreeEmail: true},
+	{Email: "gold@example.com", Status: "valid", SubStatus: "gold"},
+	{Email: "role_based_accept_all@example.com", Status: "valid", SubStatus: "role_based_accept_all"},
 	{Email: "role_based_catch_all@example.com", Status: "do_not_mail", SubStatus: "role_based_catch_all"},
 }
 

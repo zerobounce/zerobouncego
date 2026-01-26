@@ -124,6 +124,32 @@ func TestMockValidationOk(t *testing.T) {
 	}
 }
 
+func TestResponseSubStatusGold(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	mockValidateRequest()
+
+	response, error_ := ValidateWithTimeout("gold@example.com", SANDBOX_IP, "10")
+	assert.Nil(t, error_)
+	assert.Equal(t, "gold@example.com", response.Address)
+	assert.Equal(t, "valid", response.Status)
+	assert.Equal(t, "gold", response.SubStatus)
+}
+
+func TestResponseSubStatusRoleBasedAcceptAll(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	mockValidateRequest()
+
+	response, error_ := ValidateWithTimeout("role_based_accept_all@example.com", SANDBOX_IP, "10")
+	assert.Nil(t, error_)
+	assert.Equal(t, "role_based_accept_all@example.com", response.Address)
+	assert.Equal(t, "valid", response.Status)
+	assert.Equal(t, "role_based_accept_all", response.SubStatus)
+}
+
 func TestMockBulkValidationNoApiKey(t *testing.T) {
 	Initialize("")
 	httpmock.Activate()
