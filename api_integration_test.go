@@ -5,6 +5,9 @@ import (
 )
 
 func TestValidate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	Initialize("mock_key")
 	for _, e := range emailsToValidate {
 

@@ -45,6 +45,8 @@ const MOCK_API_USAGE = `{
     "sub_status_alternate": 10,
     "sub_status_blocked": 10,
     "sub_status_allowed": 10,
+    "sub_status_gold": 10,
+    "sub_status_role_based_accept_all": 10,
     "start_date": "1/1/2023",
     "end_date": "12/12/2023"
 }`
@@ -157,6 +159,8 @@ func TestApiUsageOk(t *testing.T) {
 	assert.NotEqual(t, api_usage.SubStatusAlternate, 0)
 	assert.NotEqual(t, api_usage.SubStatusBlocked, 0)
 	assert.NotEqual(t, api_usage.SubStatusAllowed, 0)
+	assert.NotEqual(t, api_usage.SubStatusGold, 0)
+	assert.NotEqual(t, api_usage.SubStatusRoleBasedAcceptAll, 0)
 
 	expected_start := time.Date(2023, 1, 1, 0, 0, 0, 0, time.Local)
 	expected_end := time.Date(2023, 12, 12, 0, 0, 0, 0, time.Local)

@@ -3,9 +3,9 @@
 go get github.com/zerobounce/zerobouncego
 ```
 
-This package uses the zero-bounce API which requires an API key. This key can be provide in three ways:
-1. through an environment variable `ZERO_BOUNCE_API_KEY` (loaded automatically in code)
-2. through an .env file that contains `ZERO_BOUNCE_API_KEY` and then calling following method before usage:
+This package uses the zero-bounce API which requires an API key. This key can be provided in three ways:
+1. through an environment variable `ZEROBOUNCE_API_KEY` (or legacy `ZERO_BOUNCE_API_KEY`), loaded automatically in code
+2. through an .env file that contains `ZEROBOUNCE_API_KEY` and then calling the following method before usage:
 ```go
 zerobouncego.LoadEnvFromFile()
 ```
@@ -350,7 +350,7 @@ Example export file:
 This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the ones ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
 
 In order to run the integration tests:
-- set appropriate `ZERO_BOUNCE_API_KEY` environment variable
+- set appropriate `ZEROBOUNCE_API_KEY` (or `ZERO_BOUNCE_API_KEY`) environment variable
 - rename all "_integration_t.go" into "_integration_test.go"
 - run either individual or all tests (`go test .`)
 

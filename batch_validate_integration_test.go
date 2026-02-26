@@ -25,6 +25,9 @@ func TestInvalidApiKey(t *testing.T) {
 }
 
 func TestBulkEmailValidation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	Initialize("mock_key")
 	response, error_ := ValidateBatch(EmailsToValidate())
 	if error_ != nil {

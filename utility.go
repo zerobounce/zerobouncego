@@ -102,14 +102,22 @@ func Getenv(key, fallback string) string {
 	return fallback
 }
 
+// getAPIKeyFromEnv returns the API key from environment (ZEROBOUNCE_API_KEY or legacy ZERO_BOUNCE_API_KEY).
+func getAPIKeyFromEnv() string {
+	if v := os.Getenv("ZEROBOUNCE_API_KEY"); v != "" {
+		return v
+	}
+	return os.Getenv("ZERO_BOUNCE_API_KEY")
+}
+
 // VAR
 var (
 	// URI used to make requests to the ZeroBounce API
 	URI      = Getenv(`ZERO_BOUNCE_URI`, `https://api.zerobounce.net/v2/`)
 	BULK_URI = Getenv(`ZERO_BOUNCE_BULK_URI`, `https://bulkapi.zerobounce.net/v2/`)
 
-	// API_KEY the API key used in order to make the requests
-	API_KEY string = os.Getenv("ZERO_BOUNCE_API_KEY")
+	// API_KEY the API key used in order to make the requests (from ZEROBOUNCE_API_KEY or ZERO_BOUNCE_API_KEY)
+	API_KEY string = getAPIKeyFromEnv()
 
 	zbApiURLValue = map[ZbApiURL]string{
 		ZB_API_URL_DEFAULT:		"https://api.zerobounce.net/v2/",
@@ -150,14 +158,15 @@ func SetURI(new_uri string, new_bulk_uri string) {
 }
 
 // LoadEnvFromFile provided that a .env file can be found where the
-// program is running, load it, extract the API key and set it
+// program is running, load it, extract the API key and set it.
+// Supports standard ZEROBOUNCE_API_KEY and legacy ZERO_BOUNCE_API_KEY.
 func LoadEnvFromFile() bool {
 	error_ := godotenv.Load(".env")
 	if error_ != nil {
 		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
 		return false
 	}
-	Initialize(os.Getenv("ZERO_BOUNCE_API_KEY"))
+	Initialize(getAPIKeyFromEnv())
 	SetURI(os.Getenv("ZERO_BOUNCE_URI"), os.Getenv("ZERO_BOUNCE_BULK_URI"))
 	return true
 }

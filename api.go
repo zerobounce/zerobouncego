@@ -51,7 +51,7 @@ func (v ValidateResponse) ProcessedAt() (time.Time, error) {
 
 // IsValid checks if an email is valid
 func (v *ValidateResponse) IsValid() bool {
-	return v.Status == "valid"
+	return v.Status == ValidateStatusValid
 }
 
 // ApiUsageResponse response structure for the API usage functionality
@@ -124,6 +124,8 @@ type ApiUsageResponse struct {
 	SubStatusAllowed int `json:"sub_status_allowed"`
 	// Total number of times the API has a sub status of "gold"
 	SubStatusGold int `json:"sub_status_gold"`
+	// Total number of times the API has a sub status of "role_based_accept_all"
+	SubStatusRoleBasedAcceptAll int `json:"sub_status_role_based_accept_all"`
 	// Start date of query.
 	RawStartDate string `json:"start_date"`
 	// End date of query.

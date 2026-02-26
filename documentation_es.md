@@ -6,8 +6,8 @@ go get github.com/zerobounce/zerobouncego
 
 Este paquete utiliza la API de ZeroBounce, la cual requiere una clave de API. Esta clave se puede proporcionar de tres formas diferentes:
 
-1. A través de una variable de entorno `ZERO_BOUNCE_API_KEY` (cargada automáticamente en el código).
-2. A través de un archivo .env que contiene `ZERO_BOUNCE_API_KEY` y luego llamando al siguiente método antes de su uso:
+1. A través de una variable de entorno `ZEROBOUNCE_API_KEY` (o legacy `ZERO_BOUNCE_API_KEY`), cargada automáticamente en el código.
+2. A través de un archivo .env que contiene `ZEROBOUNCE_API_KEY` y luego llamando al siguiente método antes de su uso:
    ```go
    zerobouncego.LoadEnvFromFile()
    ```
@@ -356,7 +356,7 @@ Ejemplo de archivo de exportación (CSV):
 Este paquete contiene tanto pruebas unitarias como pruebas de integración (que están excluidas del conjunto de pruebas). Los archivos de prueba unitaria tienen un sufijo "_test.go" (como requiere Go) y las pruebas de integración tienen un sufijo ("_integration_t.go").
 
 Para ejecutar las pruebas de integración:
-- Establece la variable de entorno `ZERO_BOUNCE_API_KEY` con la clave de API adecuada.
+- Establece la variable de entorno `ZEROBOUNCE_API_KEY` (o `ZERO_BOUNCE_API_KEY`) con la clave de API adecuada.
 - Renombra todos los archivos "_integration_t.go" a "_integration_test.go".
 - Ejecuta las pruebas individuales o todas (`go test .`)
 
