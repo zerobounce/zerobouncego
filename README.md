@@ -432,3 +432,7 @@ In order to run the integration tests:
 
 NOTE: currently, the unit tests can be updated such that, by removing the mocking and explicit API key setting, they should work as integration tests as well AS LONG AS a valid API key is provided via environment
 
+## Publish
+
+This package is indexed on [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego) automatically from GitHub. No manual publish step; push a semver tag and the proxy will pick it up. See the [sdk-docs (pkg.go.dev)](../sdk-docs/pkg-go-dev/) guide in the SDKs repo.
+
