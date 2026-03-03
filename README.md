@@ -3,6 +3,8 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)
 
+**Version and tagging:** Version is set in `version.go` and kept in sync with git tags. The SDKs monorepo scripts (`tag-version.sh`, `check-untagged-bump-and-push.sh`, `commit-and-tag-version.sh`) read and update it when creating or bumping releases. pkg.go.dev indexes the module from GitHub tags automatically.
+
 ## Installation and Usage
 ```sh
 go get github.com/zerobounce/zerobouncego
