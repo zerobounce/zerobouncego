@@ -535,6 +535,7 @@ func TestBulkValidateResult200NotSuccess(t *testing.T) {
 	if !assert.NotNil(t, error_) {
 		t.FailNow()
 	}
+	assert.Contains(t, error_.Error(), "File cannot be found.")
 	assert.Equal(t, "", string_builder.String())
 }
 
@@ -560,4 +561,33 @@ func TestBulkValidateResult200Success(t *testing.T) {
 		t.FailNow()
 	}
 	assert.Equal(t, sample_validation_result_200_content, string_builder.String())
+}
+
+func TestBulkValidationResultWithOptions(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	string_builder := &strings.Builder{}
+
+	dt := DownloadTypeCombined
+	ad := true
+	opts := &GetFileOptions{DownloadType: &dt, ActivityData: &ad}
+
+	httpmock.RegisterResponder(
+		"GET",
+		`=~^(.*)`+ENDPOINT_FILE_RESULT+`(.*)\z`,
+		func(r *http.Request) (*http.Response, error) {
+			q := r.URL.Query()
+			assert.Equal(t, DownloadTypeCombined, q.Get("download_type"))
+			assert.Equal(t, "true", q.Get("activity_data"))
+			assert.Equal(t, API_KEY, q.Get("api_key"))
+			response := httpmock.NewBytesResponse(200, []byte("a,b\n"))
+			response.Header.Add("Content-Type", CONTENT_TYPE_OCTET_STREAM)
+			return response, nil
+		},
+	)
+
+	error_ := BulkValidationResultWithOptions(testing_file_id, string_builder, opts)
+	assert.Nil(t, error_)
+	assert.Equal(t, "a,b\n", string_builder.String())
 }

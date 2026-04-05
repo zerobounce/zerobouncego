@@ -19,6 +19,11 @@ func AiScoringResult(file_id string, file_writer io.Writer) error {
 	return GenericResultFetch(file_id, ENDPOINT_SCORING_RESULT, file_writer)
 }
 
+// AiScoringResultWithOptions - AI scoring getfile with optional download_type (activity_data is not sent).
+func AiScoringResultWithOptions(file_id string, file_writer io.Writer, opts *GetFileOptions) error {
+	return genericResultFetch(file_id, ENDPOINT_SCORING_RESULT, file_writer, opts, true)
+}
+
 // AiScoringFileDelete - delete the result file associated with a file ID
 func AiScoringFileDelete(file_id string) (*FileValidationResponse, error) {
 	return GenericFileDelete(file_id, ENDPOINT_SCORING_DELETE)

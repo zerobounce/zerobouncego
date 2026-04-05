@@ -18,7 +18,19 @@ import (
 const (
 	CONTENT_TYPE_OCTET_STREAM = "application/octet-stream"
 	CONTENT_TYPE_JSON         = "application/json"
+
+	// DownloadTypePhase1 / Phase2 / Combined are v2 bulk getfile download_type query values.
+	DownloadTypePhase1   = "phase_1"
+	DownloadTypePhase2   = "phase_2"
+	DownloadTypeCombined = "combined"
 )
+
+// GetFileOptions holds optional v2 query parameters for bulk getfile.
+type GetFileOptions struct {
+	DownloadType *string
+	// ActivityData is sent only for validation getfile (not AI scoring).
+	ActivityData *bool
+}
 
 // CsvFile - used for bulk validations and AI scoring
 type CsvFile struct {
@@ -33,6 +45,11 @@ type CsvFile struct {
 	LastNameColumn     int `json:"last_name_column"`
 	GenderColumn       int `json:"gender_column"`
 	IpAddressColumn    int `json:"ip_address_column"`
+
+	// ReturnURL is optional; sent as return_url when non-empty.
+	ReturnURL string
+	// AllowPhase2 is optional; sent as allow_phase_2 for bulk validation sendfile only (not AI scoring).
+	AllowPhase2 *bool
 }
 
 // ColumnsMapping - function generating how columns-index mapping of the instance
@@ -60,8 +77,8 @@ func (c *CsvFile) ColumnsMapping() map[string]int {
 }
 
 // FillMultipartForm - populate a multi-part form with the data contained within
-// current `CsvFile` instance
-func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer) error {
+// current `CsvFile` instance. validationSendfile is true for bulk validation /sendfile only.
+func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer, validationSendfile bool) error {
 	var error_ error
 	var file_form_writer io.Writer
 
@@ -69,10 +86,18 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer) e
 	multipart_writer.WriteField("api_key", API_KEY)
 	multipart_writer.WriteField("has_header_row", fmt.Sprintf("%v", csv_file.HasHeaderRow))
 
+	if csv_file.ReturnURL != "" {
+		multipart_writer.WriteField("return_url", csv_file.ReturnURL)
+	}
+
 	// add column-related fields
 	columns_mapping := csv_file.ColumnsMapping()
 	for column_key := range columns_mapping {
 		multipart_writer.WriteField(column_key, fmt.Sprintf("%d", columns_mapping[column_key]))
+	}
+
+	if validationSendfile && csv_file.AllowPhase2 != nil {
+		multipart_writer.WriteField("allow_phase_2", fmt.Sprintf("%t", *csv_file.AllowPhase2))
 	}
 
 	// add the file AFTERWARDS
@@ -111,6 +136,7 @@ type FileStatusResponse struct {
 	UploadDateRaw      string `json:"upload_date"`
 	FileStatus         string `json:"file_status"`
 	CompletePercentage string `json:"complete_percentage"`
+	FilePhase2Status   *string `json:"file_phase_2_status,omitempty"`
 	ReturnUrl          string `json:"return_url"`
 }
 
@@ -168,7 +194,8 @@ func GenericFileSubmit(
 	// MULTI-PART FORM PREPARATION
 	multipart_writer := multipart.NewWriter(multipart_buffer)
 	multipart_writer.WriteField("remove_duplicate", fmt.Sprintf("%v", remove_duplicate))
-	error_ = csv_file.FillMultipartForm(multipart_writer)
+	validationSendfile := endpoint == ENDPOINT_FILE_SEND
+	error_ = csv_file.FillMultipartForm(multipart_writer, validationSendfile)
 	if error_ != nil {
 		return nil, error_
 	}
@@ -237,56 +264,74 @@ func GenericFileStatusCheck(file_id, endpoint string) (*FileStatusResponse, erro
 	return response_object, nil
 }
 
-// GenericResultFetch - save a csv containing the results of the file with the given file ID
-func GenericResultFetch(file_id, endpoint string, file_writer io.Writer) error {
-	var error_ error
+// isScoringBulkEndpoint is true for paths under /scoring/ (e.g. scoring getfile).
+func isScoringBulkEndpoint(endpoint string) bool {
+	return strings.Contains(endpoint, "/scoring/")
+}
 
-	// make request
+// genericResultFetch implements bulk getfile with optional v2 query params and JSON error handling.
+func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *GetFileOptions, scoring bool) error {
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", file_id)
-	url_to_request, error_ := url.JoinPath(BULK_URI, endpoint)
-	if error_ != nil {
-		return error_
+	if opts != nil {
+		if opts.DownloadType != nil && *opts.DownloadType != "" {
+			params.Set("download_type", *opts.DownloadType)
+		}
+		if !scoring && opts.ActivityData != nil {
+			params.Set("activity_data", fmt.Sprintf("%t", *opts.ActivityData))
+		}
 	}
 
+	url_to_request, err := url.JoinPath(BULK_URI, endpoint)
+	if err != nil {
+		return err
+	}
 	url_to_request = fmt.Sprintf("%s?%s", url_to_request, params.Encode())
-	response_http, error_ := http.Get(url_to_request)
-	if error_ != nil {
-		return error_
+	response_http, err := http.Get(url_to_request)
+	if err != nil {
+		return err
 	}
-
-	// handle errors
 	defer response_http.Body.Close()
+
+	body, err := io.ReadAll(response_http.Body)
+	if err != nil {
+		return errors.New("could not read response body: " + err.Error())
+	}
+
+	bodyStr := string(body)
+	ct := response_http.Header.Get("Content-Type")
+
 	if response_http.StatusCode != 200 {
-		return handleErrorPayload(response_http)
+		trim := strings.TrimSpace(bodyStr)
+		if strings.HasPrefix(trim, "{") {
+			return fmt.Errorf("%s", FormatGetFileErrorMessage(trim))
+		}
+		if trim == "" {
+			return fmt.Errorf("HTTP %d", response_http.StatusCode)
+		}
+		return fmt.Errorf("%s", trim)
 	}
 
-	// a binary file is expected as response
-	content_type := response_http.Header.Get("Content-Type")
-	if content_type == CONTENT_TYPE_JSON {
-		// {"success": false, "message": ...}
-		return handleErrorPayload(response_http)
-	}
-	if content_type != CONTENT_TYPE_OCTET_STREAM {
-		return fmt.Errorf(
-			"unexpected content type; expected %s, got %s",
-			"application/octet-stream",
-			content_type,
-		)
+	if shouldTreatGetFileBodyAsError(bodyStr, ct) {
+		return fmt.Errorf("%s", FormatGetFileErrorMessage(strings.TrimSpace(bodyStr)))
 	}
 
-	// save to file
-	response_contents, error_ := io.ReadAll(response_http.Body)
-	if error_ != nil {
-		return errors.New("could not read response body: " + error_.Error())
-	}
-
-	_, error_ = file_writer.Write(response_contents)
-	if error_ != nil {
-		return errors.New("could not write into given file: " + error_.Error())
+	_, err = file_writer.Write(body)
+	if err != nil {
+		return errors.New("could not write into given file: " + err.Error())
 	}
 	return nil
+}
+
+// GenericResultFetch - save a csv containing the results of the file with the given file ID
+func GenericResultFetch(file_id, endpoint string, file_writer io.Writer) error {
+	return genericResultFetch(file_id, endpoint, file_writer, nil, isScoringBulkEndpoint(endpoint))
+}
+
+// GenericResultFetchWithOptions - same as GenericResultFetch with optional v2 query parameters.
+func GenericResultFetchWithOptions(file_id, endpoint string, file_writer io.Writer, opts *GetFileOptions) error {
+	return genericResultFetch(file_id, endpoint, file_writer, opts, isScoringBulkEndpoint(endpoint))
 }
 
 // GenericFileDelete - delete the result file associated with a file ID

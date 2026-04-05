@@ -127,6 +127,16 @@ func main() {
 }
 ```
 
+###### Bulk API v2 (validation and getfile)
+
+Bulk validation and scoring target the v2 bulk API. Docs: [v2 send file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-send-file), [v2 file status](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-file-status), [v2 get file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file).
+
+Optional `CsvFile` fields for **validation** send only: `ReturnURL`, `AllowPhase2` (`*bool`; nil omits `allow_phase_2`). Status responses include `FilePhase2Status` when present.
+
+Optional getfile query parameters: `GetFileOptions` with `DownloadType` (`DownloadTypePhase1`, `DownloadTypePhase2`, `DownloadTypeCombined`) and `ActivityData` for **validation** getfile only. Use `BulkValidationResultWithOptions`, `AiScoringResultWithOptions`, or `GenericResultFetchWithOptions`.
+
+JSON error bodies (including HTTP 200 with `"success": false`) return an error; no bytes are written to the result writer. Helpers: `GetFileJSONIndicatesError`, `FormatGetFileErrorMessage`.
+
 ###### 3. Bulk file validation
 
 ```go
@@ -155,6 +165,8 @@ func main() {
 	defer file.Close()
 	csv_file := zerobouncego.CsvFile{
 		File: file, HasHeaderRow: false, EmailAddressColumn: 1, FileName: "emails.csv",
+		// ReturnURL: "https://example.com/callback", // optional
+		// AllowPhase2: &trueVal, // optional *bool; validation send only (define var trueVal = true)
 	}
 	submit_response, error_ := zerobouncego.BulkValidationSubmit(csv_file, false)
 	if error_ != nil {
@@ -265,6 +277,7 @@ func main() {
 	defer file.Close()
 	csv_file := zerobouncego.CsvFile{
 		File: file, HasHeaderRow: false, EmailAddressColumn: 1, FileName: "emails.csv",
+		// ReturnURL is optional for scoring send when supported by the API.
 	}
 	submit_response, error_ := zerobouncego.AiScoringFileSubmit(csv_file, false)
 	if error_ != nil {

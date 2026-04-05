@@ -18,6 +18,11 @@ func BulkValidationResult(file_id string, file_writer io.Writer) error {
 	return GenericResultFetch(file_id, ENDPOINT_FILE_RESULT, file_writer)
 }
 
+// BulkValidationResultWithOptions - bulk validation getfile with optional v2 query parameters.
+func BulkValidationResultWithOptions(file_id string, file_writer io.Writer, opts *GetFileOptions) error {
+	return genericResultFetch(file_id, ENDPOINT_FILE_RESULT, file_writer, opts, false)
+}
+
 // BulkValidationFileDelete - delete the result file associated with a file ID
 func BulkValidationFileDelete(file_id string) (*FileValidationResponse, error) {
 	return GenericFileDelete(file_id, ENDPOINT_FILE_DELETE)

@@ -147,6 +147,23 @@ func main() {
 }
 ```
 
+#### Bulk API v2 (validation and getfile)
+
+Bulk validation and scoring target the v2 bulk API. Docs: [v2 send file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-send-file), [v2 file status](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-file-status), [v2 get file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file).
+
+Optional `CsvFile` fields for **validation** send only: `ReturnURL`, `AllowPhase2` (use a `*bool`; omit or leave nil to skip sending `allow_phase_2`). Status responses include `FilePhase2Status` when the API returns it.
+
+Optional [v2 getfile](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file) query parameters: `GetFileOptions` with `DownloadType` pointing at `DownloadTypePhase1`, `DownloadTypePhase2`, or `DownloadTypeCombined`, and `ActivityData` (`*bool`) for **validation** getfile only (`AiScoringResultWithOptions` does not send `activity_data`). Use `BulkValidationResultWithOptions`, `AiScoringResultWithOptions`, or `GenericResultFetchWithOptions`.
+
+Non-CSV JSON error bodies—including some HTTP 200 responses with `"success": false`—produce an error; nothing is written to the result writer. For custom handling of raw bodies, use `GetFileJSONIndicatesError` and `FormatGetFileErrorMessage`.
+
+```go
+dt := zerobouncego.DownloadTypeCombined
+ad := true
+opts := &zerobouncego.GetFileOptions{DownloadType: &dt, ActivityData: &ad}
+err := zerobouncego.BulkValidationResultWithOptions(fileID, w, opts)
+```
+
 #### 3. Bulk file validation
 
 ```go
@@ -175,6 +192,8 @@ func main() {
 	defer file.Close()
 	csv_file := zerobouncego.CsvFile{
 		File: file, HasHeaderRow: false, EmailAddressColumn: 1, FileName: "emails.csv",
+		// ReturnURL: "https://example.com/callback", // optional
+		// AllowPhase2: &trueVal, // optional *bool; validation send only (define var trueVal = true)
 	}
 	submit_response, error_ := zerobouncego.BulkValidationSubmit(csv_file, false)
 	if error_ != nil {
@@ -285,6 +304,7 @@ func main() {
 	defer file.Close()
 	csv_file := zerobouncego.CsvFile{
 		File: file, HasHeaderRow: false, EmailAddressColumn: 1, FileName: "emails.csv",
+		// ReturnURL is optional for scoring send as well when supported by the API.
 	}
 	submit_response, error_ := zerobouncego.AiScoringFileSubmit(csv_file, false)
 	if error_ != nil {

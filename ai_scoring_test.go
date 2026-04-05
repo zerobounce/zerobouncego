@@ -417,6 +417,7 @@ func TestScoringResult200NotSuccess(t *testing.T) {
 	if !assert.NotNil(t, error_) {
 		t.FailNow()
 	}
+	assert.Contains(t, error_.Error(), "File not processed.")
 	assert.Equal(t, "", string_builder.String())
 }
 
@@ -442,4 +443,32 @@ func TestScoringResult200Success(t *testing.T) {
 		t.FailNow()
 	}
 	assert.Equal(t, sample_get_results_200_content, string_builder.String())
+}
+
+func TestAiScoringResultWithOptions(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	string_builder := &strings.Builder{}
+
+	dt := DownloadTypePhase2
+	ad := true
+	opts := &GetFileOptions{DownloadType: &dt, ActivityData: &ad}
+
+	httpmock.RegisterResponder(
+		"GET",
+		`=~^(.*)`+ENDPOINT_SCORING_RESULT+`(.*)\z`,
+		func(r *http.Request) (*http.Response, error) {
+			q := r.URL.Query()
+			assert.Equal(t, DownloadTypePhase2, q.Get("download_type"))
+			assert.False(t, q.Has("activity_data"))
+			response := httpmock.NewBytesResponse(200, []byte("x\n"))
+			response.Header.Add("Content-Type", CONTENT_TYPE_OCTET_STREAM)
+			return response, nil
+		},
+	)
+
+	error_ := AiScoringResultWithOptions(testing_file_id, string_builder, opts)
+	assert.Nil(t, error_)
+	assert.Equal(t, "x\n", string_builder.String())
 }
