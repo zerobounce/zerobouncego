@@ -3,11 +3,11 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)
 
-**Version and tagging:** Version is set in `version.go` and kept in sync with git tags. The SDKs monorepo scripts (`tag-version.sh`, `check-untagged-bump-and-push.sh`, `commit-and-tag-version.sh`) read and update it when creating or bumping releases. pkg.go.dev indexes the module from GitHub tags automatically.
+**Version and tagging:** Version is set in `version.go` and kept in sync with git tags. The SDKs monorepo scripts (`tag-version.sh`, `check-untagged-bump-and-push.sh`, `commit-and-tag-version.sh`) read and update it when creating or bumping releases. pkg.go.dev indexes the module from GitHub tags automatically. For **v2 and later**, the Go module path must include `/v2` ([semantic import versioning](https://go.dev/ref/mod#major-version-suffixes)); v1.x uses `github.com/zerobounce/zerobouncego` without the suffix.
 
 ## Installation and Usage
 ```sh
-go get github.com/zerobounce/zerobouncego
+go get github.com/zerobounce/zerobouncego/v2
 ```
 
 This package uses the zero-bounce API which requires an API key. This key can be provided in three ways:
@@ -43,7 +43,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -80,7 +80,7 @@ package main
 import (
     "fmt"
     "os"
-    "github.com/zerobounce/zerobouncego"
+    "github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -117,7 +117,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -174,7 +174,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 
@@ -285,7 +285,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 
@@ -395,7 +395,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -418,7 +418,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -456,5 +456,5 @@ NOTE: currently, the unit tests can be updated such that, by removing the mockin
 
 ## Publish
 
-This package is indexed on [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego) automatically from GitHub. No manual publish step; push a semver tag and the proxy will pick it up. See the [sdk-docs (pkg.go.dev)](../sdk-docs/pkg-go-dev/) guide in the SDKs repo.
+This package is indexed on [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego/v2) automatically from GitHub. No manual publish step; push a semver tag and the proxy will pick it up. See the [sdk-docs (pkg.go.dev)](../sdk-docs/pkg-go-dev/) guide in the SDKs repo.
 

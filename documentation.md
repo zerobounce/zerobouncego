@@ -1,6 +1,6 @@
 #### Installation and Usage
 ```sh
-go get github.com/zerobounce/zerobouncego
+go get github.com/zerobounce/zerobouncego/v2
 ```
 
 This package uses the zero-bounce API which requires an API key. This key can be provided in three ways:
@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -60,7 +60,7 @@ package main
 import (
     "fmt"
     "os"
-    "github.com/zerobounce/zerobouncego"
+    "github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -97,7 +97,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
@@ -147,7 +147,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 
@@ -258,7 +258,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego"
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 
