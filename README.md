@@ -456,5 +456,30 @@ NOTE: currently, the unit tests can be updated such that, by removing the mockin
 
 ## Publish
 
-This package is indexed on [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego/v2) automatically from GitHub. No manual publish step; push a semver tag and the proxy will pick it up. See the [sdk-docs (pkg.go.dev)](../sdk-docs/pkg-go-dev/) guide in the SDKs repo.
+There is no npm-style “publish” command. [proxy.golang.org](https://proxy.golang.org) and [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego/v2) pull releases from **Git tags** on this repo.
+
+### Release checklist (maintainers)
+
+1. **`go.mod` `module` line must match the major version of the tag** ([semantic import versioning](https://go.dev/ref/mod#major-version-suffixes)):
+   - Tags **`v1.x.x`** → module path **`github.com/zerobounce/zerobouncego`** (no major suffix).
+   - Tags **`v2.x.x` and above** → module path **`github.com/zerobounce/zerobouncego/v2`** (must end with **`/v2`**). Consumer imports use the same path, e.g. `"github.com/zerobounce/zerobouncego/v2"`.
+2. Bump **`version.go`** (`Version = "…"`) to match the release you are about to tag.
+3. Commit, then create an **annotated** tag `vMAJOR.MINOR.PATCH` and push **`main`** and **`git push origin vMAJOR.MINOR.PATCH`**.
+
+### Verify the release reached the proxy
+
+After pushing the tag, confirm the proxy serves it (replace `v2` in the URL if you ever ship a v3 line with `/v3`):
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' \
+  "https://proxy.golang.org/github.com/zerobounce/zerobouncego/v2/@v/${TAG}.info"
+```
+
+Expect **`200`**. **`404`** here means the version is **not** installable with `go get`—almost always because the **`module` path and tag major version disagree** (e.g. `v2.1.0` tag with a module line missing `/v2`). That happened for **`v2.0.0`–`v2.1.0`**; **`v2.1.1`** was the first v2 tag published correctly.
+
+You can also run `go list -m -versions github.com/zerobounce/zerobouncego/v2` locally.
+
+### Reference
+
+Monorepo maintainer notes: [sdk-docs/pkg-go.dev](../sdk-docs/pkg-go-dev/) in the SDKs repo.
 

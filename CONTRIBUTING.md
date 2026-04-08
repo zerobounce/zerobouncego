@@ -45,6 +45,17 @@ Open an [issue](https://github.com/zerobounce/zerobouncego/issues) and include:
 
 Maintainers will review and may request changes. Once approved, your PR can be merged.
 
+## Releases (maintainers)
+
+Go modules are **not** published to a package registry. A release is a **git tag**; [proxy.golang.org](https://proxy.golang.org) mirrors tagged commits from GitHub.
+
+**Critical rule:** the **`module` line in `go.mod` must match the major version of the tag**:
+
+- **`v2.x.x` tags** require `module github.com/zerobounce/zerobouncego/v2`.
+- **`v1.x.x` tags** use `module github.com/zerobounce/zerobouncego` (no `/v2`).
+
+If you tag **v2+** without the **`/v2`** module path, the proxy will **not** serve that version (users see 404 / missing versions). See the full **Publish** section in [README.md](README.md) (checklist and `curl` verification) and [sdk-docs/pkg-go.dev](../sdk-docs/pkg-go-dev/) in the SDKs monorepo.
+
 ## Questions
 
 * [Zero Bounce API docs](https://www.zerobounce.net/docs/)
