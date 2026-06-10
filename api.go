@@ -33,6 +33,7 @@ type ValidateResponse struct {
 	Domain         string      `json:"domain"`
 	DomainAgeDays  null.String `json:"domain_age_days"`
 	SMTPProvider   null.String `json:"smtp_provider"`
+	CatchallDomain null.Bool   `json:"catchall_domain"`
 	MxRecord       string      `json:"mx_record"`
 	MxFound        string      `json:"mx_found"`
 	Firstname      null.String `json:"firstname"`
