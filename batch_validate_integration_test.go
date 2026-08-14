@@ -17,6 +17,9 @@ func EmailsToValidate() []EmailToValidate {
 
 // TestInvalidApiKey test expecting one error, relevant to invalid API key
 func TestInvalidApiKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	Initialize("some_invalid_value")
 	response, error_ := ValidateBatch(EmailsToValidate())
 
