@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jarcoal/httpmock"
 	"github.com/joho/godotenv"
@@ -38,6 +39,7 @@ const (
 const (
 	DATE_TIME_FORMAT = "2006-01-02 15:04:05"
 	DATE_ONLY_FORMAT = "2006-01-02"
+	httpTimeout      = 120 * time.Second
 )
 
 // validation statuses
@@ -147,13 +149,31 @@ func SetApiKey(new_api_key_value string) {
 	API_KEY = new_api_key_value
 }
 
+func requireHTTPS(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	if !strings.EqualFold(parsed.Scheme, "https") {
+		return "", fmt.Errorf("URI must be an https:// URL")
+	}
+	return raw, nil
+}
+
 // Update URI, BULK_URI or both (will not be updated if empty strings are passed)
 func SetURI(new_uri string, new_bulk_uri string) {
 	if new_uri != "" {
-		URI = new_uri
+		if validated, err := requireHTTPS(new_uri); err == nil {
+			URI = validated
+		}
 	}
 	if new_bulk_uri != "" {
-		BULK_URI = new_bulk_uri
+		if validated, err := requireHTTPS(new_bulk_uri); err == nil {
+			BULK_URI = validated
+		}
 	}
 }
 
@@ -231,11 +251,19 @@ func ErrorFromResponse(response *http.Response) error {
 	return errors.New("error: " + strings.Join(error_strings, ", "))
 }
 
+func timedHTTPClient() *http.Client {
+	c := *http.DefaultClient
+	if c.Timeout == 0 {
+		c.Timeout = httpTimeout
+	}
+	return &c
+}
+
 // DoGetRequest does a GET request to the API
 func DoGetRequest(url string, object APIResponse) error {
 
 	// Do the request
-	response, err := http.Get(url)
+	response, err := timedHTTPClient().Get(url)
 	if err != nil {
 		return err
 	}

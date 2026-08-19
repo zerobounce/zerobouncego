@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -205,7 +204,7 @@ func GenericFileSubmit(
 	if error_ != nil {
 		return nil, error_
 	}
-	response_http, error_ := http.DefaultClient.Post(
+	response_http, error_ := timedHTTPClient().Post(
 		url_to_access,
 		multipart_writer.FormDataContentType(),
 		multipart_buffer,
@@ -244,7 +243,7 @@ func GenericFileStatusCheck(file_id, endpoint string) (*FileStatusResponse, erro
 	}
 
 	url_to_request = fmt.Sprintf("%s?%s", url_to_request, params.Encode())
-	response_http, error_ := http.Get(url_to_request)
+	response_http, error_ := timedHTTPClient().Get(url_to_request)
 	if error_ != nil {
 		return nil, error_
 	}
@@ -288,7 +287,7 @@ func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *G
 		return err
 	}
 	url_to_request = fmt.Sprintf("%s?%s", url_to_request, params.Encode())
-	response_http, err := http.Get(url_to_request)
+	response_http, err := timedHTTPClient().Get(url_to_request)
 	if err != nil {
 		return err
 	}
@@ -346,7 +345,7 @@ func GenericFileDelete(file_id, endpoint string) (*FileValidationResponse, error
 	}
 	url_to_request = fmt.Sprintf("%s?%s", url_to_request, params.Encode())
 
-	response_http, error_ := http.Get(url_to_request)
+	response_http, error_ := timedHTTPClient().Get(url_to_request)
 	if error_ != nil {
 		return nil, error_
 	}
