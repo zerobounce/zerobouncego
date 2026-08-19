@@ -3,7 +3,6 @@ package zerobouncego
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 )
@@ -51,7 +50,7 @@ func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error)
 	if error_ != nil {
 		return *response_object, fmt.Errorf("invalid URL (%s) or endpoint (%s) value", URI, ENDPOINT_BATCH_VALIDATE)
 	}
-	response, error_ := http.DefaultClient.Post(url_to_access, "application/json", request_payload)
+	response, error_ := timedHTTPClient().Post(url_to_access, "application/json", request_payload)
 
 	// handle errors
 	if error_ != nil {
