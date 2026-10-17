@@ -21,6 +21,7 @@ type ZbApiURL int
 const (
 	ENDPOINT_CREDITS        = "/getcredits"
 	ENDPOINT_ACTIVITY_DATA  = "/activity"
+	ENDPOINT_SCORING        = "/scoring"
 	ENDPOINT_VALIDATE       = "/validate"
 	ENDPOINT_API_USAGE      = "/getapiusage"
 	ENDPOINT_BATCH_VALIDATE = "/validatebatch"
@@ -301,6 +302,30 @@ func DoGetRequest(url string, object APIResponse) error {
 	// Decode JSON Request
 	err = json.NewDecoder(response.Body).Decode(&object)
 	return err
+}
+
+// DoPostFormRequest POSTs application/x-www-form-urlencoded data to the main API.
+func DoPostFormRequest(endpoint string, form url.Values, object APIResponse) error {
+	if form == nil {
+		form = url.Values{}
+	}
+	form.Set("api_key", API_KEY)
+
+	urlToAccess, err := url.JoinPath(URI, endpoint)
+	if err != nil {
+		return fmt.Errorf("invalid URL (%s) or endpoint (%s) value", URI, endpoint)
+	}
+
+	response, err := timedHTTPClient().PostForm(urlToAccess, form)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return ErrorFromResponse(response)
+	}
+
+	return json.NewDecoder(response.Body).Decode(&object)
 }
 
 // TESTING
