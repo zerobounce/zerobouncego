@@ -259,11 +259,35 @@ func timedHTTPClient() *http.Client {
 	return &c
 }
 
+// redactAPIKey masks the api_key query value of a request URL.
+func redactAPIKey(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "(url redacted)"
+	}
+	query := parsed.Query()
+	if _, found := query["api_key"]; !found {
+		return rawURL
+	}
+	query.Set("api_key", "REDACTED")
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func httpGet(requestURL string) (*http.Response, error) {
+	response, err := timedHTTPClient().Get(requestURL)
+	var urlErr *url.Error
+	if err != nil && errors.As(err, &urlErr) {
+		urlErr.URL = redactAPIKey(urlErr.URL)
+	}
+	return response, err
+}
+
 // DoGetRequest does a GET request to the API
 func DoGetRequest(url string, object APIResponse) error {
 
 	// Do the request
-	response, err := timedHTTPClient().Get(url)
+	response, err := httpGet(url)
 	if err != nil {
 		return err
 	}

@@ -8,4 +8,7 @@ COPY . .
 RUN go mod download
 
 # -short skips integration tests that call the real API
+
+USER 65532:65532
+
 CMD ["go", "test", "./...", "-cover", "-short", "-v"]
