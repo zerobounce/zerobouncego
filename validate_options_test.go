@@ -31,6 +31,28 @@ func TestValidateWithOptionsSendsActivityAndVerifyPlus(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestValidateWithOptionsPost(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder("POST", `=~^(.*)`+ENDPOINT_VALIDATE+`\z`,
+		func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, "POST", req.Method)
+			assert.NoError(t, req.ParseForm())
+			assert.Equal(t, "a@b.com", req.FormValue("email"))
+			assert.Equal(t, "mock_key", req.FormValue("api_key"))
+			return httpmock.NewStringResponse(200, `{"address":"a@b.com","status":"valid","sub_status":""}`), nil
+		},
+	)
+
+	_, err := ValidateWithOptions("a@b.com", ValidateOptions{
+		IPAddress: SANDBOX_IP,
+		UsePost:   true,
+	})
+	assert.Nil(t, err)
+}
+
 func TestValidateBatchWithOptionsSendsBodyFields(t *testing.T) {
 	Initialize("mock_key")
 	httpmock.Activate()

@@ -128,6 +128,27 @@ func TestListFiltersPostMethod(t *testing.T) {
 	assert.Equal(t, "[]", string(raw))
 }
 
+func TestListS3FilesURL(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder(
+		"GET",
+		`=~^https://bulkapi\.zerobounce\.net/listS3files`,
+		func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, "mock_key", req.URL.Query().Get("api_key"))
+			assert.Equal(t, "my-bucket", req.URL.Query().Get("bucket"))
+			return httpmock.NewStringResponse(200, `[{"name":"a.csv","size":1,"last_modified":"2024-01-01T00:00:00Z"}]`), nil
+		},
+	)
+
+	entries, err := ListS3Files(ListS3FilesOptions{Bucket: "my-bucket"})
+	assert.NoError(t, err)
+	assert.Len(t, entries, 1)
+	assert.Equal(t, "a.csv", entries[0].Name)
+}
+
 func TestValidateS3FileURL(t *testing.T) {
 	Initialize("mock_key")
 	httpmock.Activate()

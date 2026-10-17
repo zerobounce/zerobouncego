@@ -254,6 +254,49 @@ func ScoreS3File(opts ScoreS3FileOptions) (*FileValidationResponse, error) {
 	return postBulkRootForm("/scoreS3file", fields)
 }
 
+// S3ListFileEntry is one file returned by GET /listS3files.
+type S3ListFileEntry struct {
+	Name         string `json:"name"`
+	Size         int    `json:"size"`
+	LastModified string `json:"last_modified"`
+}
+
+// ListS3FilesOptions optional query parameters for GET /listS3files.
+type ListS3FilesOptions struct {
+	Bucket string
+	Search string
+}
+
+// ListS3Files lists S3 objects available for validation or scoring.
+func ListS3Files(opts ListS3FilesOptions) ([]S3ListFileEntry, error) {
+	params := url.Values{}
+	params.Set("api_key", API_KEY)
+	if strings.TrimSpace(opts.Bucket) != "" {
+		params.Set("bucket", opts.Bucket)
+	}
+	if strings.TrimSpace(opts.Search) != "" {
+		params.Set("search", opts.Search)
+	}
+	requestURL, err := url.JoinPath(bulkAPIRoot(), "listS3files")
+	if err != nil {
+		return nil, err
+	}
+	fullURL := requestURL + "?" + params.Encode()
+	responseHTTP, err := timedHTTPClient().Get(fullURL)
+	if err != nil {
+		return nil, err
+	}
+	defer responseHTTP.Body.Close()
+	if responseHTTP.StatusCode != 200 {
+		return nil, handleErrorPayload(responseHTTP)
+	}
+	var entries []S3ListFileEntry
+	if err = json.NewDecoder(responseHTTP.Body).Decode(&entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
 // ExportS3File exports a completed bulk job to an S3 bucket.
 func ExportS3File(fileID, exportBucket string) (*FileValidationResponse, error) {
 	if strings.TrimSpace(fileID) == "" {

@@ -152,6 +152,7 @@ type ValidateOptions struct {
 	Timeout      string
 	ActivityData *bool
 	VerifyPlus   *bool
+	UsePost      bool
 }
 
 // Validate validates a single email
@@ -178,6 +179,17 @@ func ValidateWithOptions(email string, opts ValidateOptions) (*ValidateResponse,
 	}
 
 	response := &ValidateResponse{}
+	if opts.UsePost {
+		form := url.Values{}
+		for key, values := range params {
+			if len(values) > 0 {
+				form.Set(key, values[0])
+			}
+		}
+		error_ := DoPostFormRequest(ENDPOINT_VALIDATE, form, response)
+		return response, error_
+	}
+
 	url_to_request, error_ := PrepareURL(ENDPOINT_VALIDATE, params)
 	if error_ != nil {
 		return response, error_
