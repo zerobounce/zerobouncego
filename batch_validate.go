@@ -27,16 +27,37 @@ type ValidateBatchResponse struct {
 	Errors     []EmailBatchError  `json:"errors"`
 }
 
+// ValidateBatchOptions optional body fields for POST /validatebatch.
+type ValidateBatchOptions struct {
+	Timeout      *int
+	ActivityData *bool
+	VerifyPlus   *bool
+}
+
 // ValidateBatch given a list of emails (and, optionally, their IPs), validate
 // them and return both validation details and errors about the emails sent
 func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error) {
+	return ValidateBatchWithOptions(emails_list, nil)
+}
+
+func ValidateBatchWithOptions(emails_list []EmailToValidate, opts *ValidateBatchOptions) (ValidateBatchResponse, error) {
 	response_object := &ValidateBatchResponse{}
 	var error_ error
 
-	// request preparation
 	payload_data := map[string]interface{}{
 		"api_key":     API_KEY,
 		"email_batch": emails_list,
+	}
+	if opts != nil {
+		if opts.Timeout != nil {
+			payload_data["timeout"] = *opts.Timeout
+		}
+		if opts.ActivityData != nil {
+			payload_data["activity_data"] = *opts.ActivityData
+		}
+		if opts.VerifyPlus != nil {
+			payload_data["verify_plus"] = *opts.VerifyPlus
+		}
 	}
 	request_payload_builder := &strings.Builder{}
 	encode_error := json.NewEncoder(request_payload_builder).Encode(payload_data)
