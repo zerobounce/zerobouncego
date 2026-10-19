@@ -1,10 +1,8 @@
 package zerobouncego
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -80,7 +78,7 @@ const (
 	SS_ROLE_BASED_ACCEPT_ALL       = "role_based_accept_all"
 	SS_DISPOSABLE                  = "disposable"
 	SS_TOXIC                       = "toxic"
-	SS_ACCEPT_ALL				   = "accept_all"
+	SS_ACCEPT_ALL                  = "accept_all"
 	SS_ALTERNATE                   = "alternate"
 	SS_MX_FORWARD                  = "mx_forward"
 	SS_BLOCKED                     = "blocked"
@@ -123,9 +121,9 @@ var (
 	API_KEY string = getAPIKeyFromEnv()
 
 	zbApiURLValue = map[ZbApiURL]string{
-		ZB_API_URL_DEFAULT:		"https://api.zerobounce.net/v2/",
-		ZB_API_URL_USA:			"https://api-us.zerobounce.net/v2/",
-		ZB_API_URL_EU:			"https://api-eu.zerobounce.net/v2/",
+		ZB_API_URL_DEFAULT: "https://api.zerobounce.net/v2/",
+		ZB_API_URL_USA:     "https://api-us.zerobounce.net/v2/",
+		ZB_API_URL_EU:      "https://api-eu.zerobounce.net/v2/",
 	}
 )
 
@@ -195,67 +193,51 @@ func LoadEnvFromFile() bool {
 // PrepareURL prepares the URL for a get request by attaching both the API
 // key and the given params
 func PrepareURL(endpoint string, params url.Values) (string, error) {
-
-	// Set API KEY
-	params.Set("api_key", API_KEY)
-
-	// Create a return the final URL
-	final_url, error_ := url.JoinPath(URI, endpoint)
-	if error_ != nil {
-		return "", error_
-	}
-	return fmt.Sprintf("%s?%s", final_url, params.Encode()), nil
+	return prepareURL(packageConfig(), endpoint, params)
 }
 
-// handleErrorPayload - generate error based on an error payload with expected
-// response payload: {"success": false, "message": ...}
+func prepareURL(cfg RequestConfig, endpoint string, params url.Values) (string, error) {
+	if err := cfg.requireKey(); err != nil {
+		return "", err
+	}
+
+	params.Set("api_key", cfg.APIKey)
+
+	finalURL, err := url.JoinPath(cfg.URI, endpoint)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s?%s", finalURL, params.Encode()), nil
+}
+
+// handleErrorPayload turns a non-success HTTP payload into a short error.
 func handleErrorPayload(response *http.Response) error {
-	var error_ error
-	var response_payload map[string]interface{} // expected keys: success, message
 	defer response.Body.Close()
-
-	error_ = json.NewDecoder(response.Body).Decode(&response_payload)
-	if error_ != nil {
-		return fmt.Errorf(
-			"error occurred while parsing a status %d response payload: %s",
-			response.StatusCode,
-			error_.Error(),
-		)
-	}
-
-	return fmt.Errorf("error message: %s", response_payload["message"])
+	return ErrorFromResponse(response)
 }
 
-// ErrorFromResponse given a response who is expected to have a json structure,
-// generate a joined response of all values within that json
-// This function was done because error messages have inconsistent keys
-// eg: error, message, Message etc
+// ErrorFromResponse turns an HTTP error body into a short error.
+// The caller owns closing the body when it does not use handleErrorPayload.
 func ErrorFromResponse(response *http.Response) error {
-	// ERROR handling: expect a json payload containing details about the error
-	var error_response map[string]string
-
-	response_body, error_ := io.ReadAll(response.Body)
-	if error_ != nil {
-		return errors.New("server error: " + error_.Error())
+	responseBody, err := readLimitedBody(response.Body)
+	if err != nil {
+		if len(responseBody) > 0 && strings.Contains(err.Error(), "not valid JSON") {
+			return err
+		}
+		return errors.New("server error: " + err.Error())
 	}
-	error_ = json.NewDecoder(strings.NewReader(string(response_body))).Decode(&error_response)
-	if error_ != nil {
-		// unexpected non-json payload
-		return errors.New(string(response_body))
-	}
-
-	// return all possible details about the error
-	var error_strings []string
-	for _, value := range error_response {
-		error_strings = append(error_strings, value)
-	}
-	return errors.New("error: " + strings.Join(error_strings, ", "))
+	return errors.New(messageFromBody(response.StatusCode, response.Header.Get("Content-Type"), string(responseBody)))
 }
 
 func timedHTTPClient() *http.Client {
 	c := *http.DefaultClient
 	if c.Timeout == 0 {
 		c.Timeout = httpTimeout
+	}
+	// A 3xx must not be followed. The API key is in the query string, and a
+	// redirect could send it to another host.
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
 	}
 	return &c
 }
@@ -285,35 +267,40 @@ func httpGet(requestURL string) (*http.Response, error) {
 }
 
 // DoGetRequest does a GET request to the API
-func DoGetRequest(url string, object APIResponse) error {
-
-	// Do the request
-	response, err := httpGet(url)
+func DoGetRequest(requestURL string, object APIResponse) error {
+	response, err := httpGet(requestURL)
 	if err != nil {
 		return err
 	}
-
-	// Close the request
 	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		return ErrorFromResponse(response)
-	}
 
-	// Decode JSON Request
-	err = json.NewDecoder(response.Body).Decode(&object)
-	return err
+	body, err := readLimitedBody(response.Body)
+	if err != nil {
+		if len(body) > 0 && strings.Contains(err.Error(), "not valid JSON") {
+			return err
+		}
+		return err
+	}
+	return decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, object)
 }
 
 // DoPostFormRequest POSTs application/x-www-form-urlencoded data to the main API.
 func DoPostFormRequest(endpoint string, form url.Values, object APIResponse) error {
+	return doPostFormRequest(packageConfig(), endpoint, form, object)
+}
+
+func doPostFormRequest(cfg RequestConfig, endpoint string, form url.Values, object APIResponse) error {
+	if err := cfg.requireKey(); err != nil {
+		return err
+	}
 	if form == nil {
 		form = url.Values{}
 	}
-	form.Set("api_key", API_KEY)
+	form.Set("api_key", cfg.APIKey)
 
-	urlToAccess, err := url.JoinPath(URI, endpoint)
+	urlToAccess, err := url.JoinPath(cfg.URI, endpoint)
 	if err != nil {
-		return fmt.Errorf("invalid URL (%s) or endpoint (%s) value", URI, endpoint)
+		return fmt.Errorf("invalid URL (%s) or endpoint (%s) value", cfg.URI, endpoint)
 	}
 
 	response, err := timedHTTPClient().PostForm(urlToAccess, form)
@@ -321,11 +308,15 @@ func DoPostFormRequest(endpoint string, form url.Values, object APIResponse) err
 		return err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		return ErrorFromResponse(response)
-	}
 
-	return json.NewDecoder(response.Body).Decode(&object)
+	body, err := readLimitedBody(response.Body)
+	if err != nil {
+		if len(body) > 0 && strings.Contains(err.Error(), "not valid JSON") {
+			return err
+		}
+		return err
+	}
+	return decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, object)
 }
 
 // TESTING

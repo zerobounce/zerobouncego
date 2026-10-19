@@ -25,28 +25,28 @@ func (c *CreditsResponse) Credits() int {
 
 // ValidateResponse response structure for single email validation
 type ValidateResponse struct {
-	Address        string      `json:"address"`
-	Status         string      `json:"status"`
-	SubStatus      string      `json:"sub_status"`
-	FreeEmail      bool        `json:"free_email"`
-	DidYouMean     null.String `json:"did_you_mean"`
-	Account        string      `json:"account"`
-	Domain         string      `json:"domain"`
-	DomainAgeDays     null.String `json:"domain_age_days"`
-	ActiveInDays      null.String `json:"active_in_days"`
-	ActiveFirstSeen   null.String `json:"active_first_seen"`
-	SMTPProvider      null.String `json:"smtp_provider"`
-	CatchallDomain null.Bool   `json:"catchall_domain"`
-	MxRecord       string      `json:"mx_record"`
-	MxFound        string      `json:"mx_found"`
-	Firstname      null.String `json:"firstname"`
-	Lastname       null.String `json:"lastname"`
-	Gender         null.String `json:"gender"`
-	Country        null.String `json:"country"`
-	Region         null.String `json:"region"`
-	City           null.String `json:"city"`
-	Zipcode        null.String `json:"zipcode"`
-	RawProcessedAt string      `json:"processed_at"`
+	Address         string      `json:"address"`
+	Status          string      `json:"status"`
+	SubStatus       string      `json:"sub_status"`
+	FreeEmail       bool        `json:"free_email"`
+	DidYouMean      null.String `json:"did_you_mean"`
+	Account         string      `json:"account"`
+	Domain          string      `json:"domain"`
+	DomainAgeDays   null.String `json:"domain_age_days"`
+	ActiveInDays    null.String `json:"active_in_days"`
+	ActiveFirstSeen null.String `json:"active_first_seen"`
+	SMTPProvider    null.String `json:"smtp_provider"`
+	CatchallDomain  null.Bool   `json:"catchall_domain"`
+	MxRecord        string      `json:"mx_record"`
+	MxFound         string      `json:"mx_found"`
+	Firstname       null.String `json:"firstname"`
+	Lastname        null.String `json:"lastname"`
+	Gender          null.String `json:"gender"`
+	Country         null.String `json:"country"`
+	Region          null.String `json:"region"`
+	City            null.String `json:"city"`
+	Zipcode         null.String `json:"zipcode"`
+	RawProcessedAt  string      `json:"processed_at"`
 }
 
 func (v ValidateResponse) ProcessedAt() (time.Time, error) {
@@ -165,6 +165,17 @@ func ValidateWithTimeout(email string, IPAddress string, timeout string) (*Valid
 }
 
 func ValidateWithOptions(email string, opts ValidateOptions) (*ValidateResponse, error) {
+	return validateWithOptions(packageConfig(), email, opts)
+}
+
+func validateWithOptions(cfg RequestConfig, email string, opts ValidateOptions) (*ValidateResponse, error) {
+	if opts.Timeout != "" {
+		timeout, err := strconv.Atoi(opts.Timeout)
+		if err != nil || timeout < 3 || timeout > 60 {
+			return nil, fmt.Errorf("Invalid parameter: timeout (must be between 3 and 60 seconds)")
+		}
+	}
+
 	params := url.Values{}
 	params.Set("email", email)
 	params.Set("ip_address", opts.IPAddress)
@@ -186,29 +197,31 @@ func ValidateWithOptions(email string, opts ValidateOptions) (*ValidateResponse,
 				form.Set(key, values[0])
 			}
 		}
-		error_ := DoPostFormRequest(ENDPOINT_VALIDATE, form, response)
-		return response, error_
+		err := doPostFormRequest(cfg, ENDPOINT_VALIDATE, form, response)
+		return response, err
 	}
 
-	url_to_request, error_ := PrepareURL(ENDPOINT_VALIDATE, params)
-	if error_ != nil {
-		return response, error_
+	urlToRequest, err := prepareURL(cfg, ENDPOINT_VALIDATE, params)
+	if err != nil {
+		return response, err
 	}
-	error_ = DoGetRequest(url_to_request, response)
-	return response, error_
+	err = DoGetRequest(urlToRequest, response)
+	return response, err
 }
 
 // GetCredits gets credits balance
 func GetCredits() (*CreditsResponse, error) {
-	var error_ error
-	response := &CreditsResponse{}
+	return getCredits(packageConfig())
+}
 
-	url_to_request, error_ := PrepareURL(ENDPOINT_CREDITS, url.Values{})
-	if error_ != nil {
-		return response, error_
+func getCredits(cfg RequestConfig) (*CreditsResponse, error) {
+	response := &CreditsResponse{}
+	urlToRequest, err := prepareURL(cfg, ENDPOINT_CREDITS, url.Values{})
+	if err != nil {
+		return response, err
 	}
-	error_ = DoGetRequest(url_to_request, response)
-	return response, error_
+	err = DoGetRequest(urlToRequest, response)
+	return response, err
 }
 
 // GetApiUsage the usage of the API within a date interval

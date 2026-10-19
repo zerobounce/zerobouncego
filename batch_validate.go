@@ -41,11 +41,25 @@ func ValidateBatch(emails_list []EmailToValidate) (ValidateBatchResponse, error)
 }
 
 func ValidateBatchWithOptions(emails_list []EmailToValidate, opts *ValidateBatchOptions) (ValidateBatchResponse, error) {
+	return validateBatchWithOptions(packageConfig(), emails_list, opts)
+}
+
+func validateBatchWithOptions(cfg RequestConfig, emails_list []EmailToValidate, opts *ValidateBatchOptions) (ValidateBatchResponse, error) {
 	response_object := &ValidateBatchResponse{}
 	var error_ error
 
+	if opts != nil && opts.Timeout != nil {
+		timeout := *opts.Timeout
+		if timeout < 10 || timeout > 120 {
+			return *response_object, fmt.Errorf("Invalid parameter: timeout (must be between 10 and 120 seconds)")
+		}
+	}
+	if error_ = cfg.requireKey(); error_ != nil {
+		return *response_object, error_
+	}
+
 	payload_data := map[string]interface{}{
-		"api_key":     API_KEY,
+		"api_key":     cfg.APIKey,
 		"email_batch": emails_list,
 	}
 	if opts != nil {
@@ -66,23 +80,34 @@ func ValidateBatchWithOptions(emails_list []EmailToValidate, opts *ValidateBatch
 	}
 	request_payload := strings.NewReader(request_payload_builder.String())
 
-	// actual request
-	url_to_access, error_ := url.JoinPath(URI, ENDPOINT_BATCH_VALIDATE)
+	urlToAccess, error_ := url.JoinPath(cfg.URI, ENDPOINT_BATCH_VALIDATE)
 	if error_ != nil {
-		return *response_object, fmt.Errorf("invalid URL (%s) or endpoint (%s) value", URI, ENDPOINT_BATCH_VALIDATE)
+		return *response_object, fmt.Errorf("invalid URL (%s) or endpoint (%s) value", cfg.URI, ENDPOINT_BATCH_VALIDATE)
 	}
-	response, error_ := timedHTTPClient().Post(url_to_access, "application/json", request_payload)
-
-	// handle errors
+	response, error_ := timedHTTPClient().Post(urlToAccess, "application/json", request_payload)
 	if error_ != nil {
 		return *response_object, error_
 	}
-
-	// queue body closing before accessing it
 	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		return *response_object, ErrorFromResponse(response)
+
+	body, error_ := readLimitedBody(response.Body)
+	if error_ != nil {
+		if len(body) > 0 && strings.Contains(error_.Error(), "not valid JSON") {
+			return *response_object, error_
+		}
+		return *response_object, error_
 	}
-	json.NewDecoder(response.Body).Decode(response_object)
+	if error_ = decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, response_object); error_ != nil {
+		return ValidateBatchResponse{}, error_
+	}
+	for _, item := range response_object.Errors {
+		if strings.EqualFold(strings.TrimSpace(item.EmailAddress), "all") {
+			message := stripErrorPrefix(strings.TrimSpace(item.Error))
+			if message == "" {
+				message = "Invalid API Key or your account ran out of credits"
+			}
+			return ValidateBatchResponse{}, fmt.Errorf("%s", message)
+		}
+	}
 	return *response_object, nil
 }

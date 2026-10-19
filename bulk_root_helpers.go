@@ -2,7 +2,6 @@ package zerobouncego
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -39,6 +38,12 @@ func appendMultipartFields(writer *multipart.Writer, fields map[string]string) e
 }
 
 func postBulkRootMultipart(requestURL string, file io.Reader, fileName string, fields map[string]string) (*FileValidationResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
+	if file == nil {
+		return nil, fmt.Errorf("empty parameter: file")
+	}
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
 
@@ -69,19 +74,21 @@ func postBulkRootMultipart(requestURL string, file io.Reader, fileName string, f
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-
-	if responseHTTP.StatusCode != 201 && responseHTTP.StatusCode != 200 {
-		return nil, handleErrorPayload(responseHTTP)
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
 	}
-
 	responseObject := &FileValidationResponse{}
-	if err = json.NewDecoder(responseHTTP.Body).Decode(responseObject); err != nil {
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, responseObject); err != nil {
 		return nil, err
 	}
 	return responseObject, nil
 }
 
 func postBulkRootForm(path string, fields url.Values) (*FileValidationResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	if fields == nil {
 		fields = url.Values{}
 	}
@@ -97,19 +104,21 @@ func postBulkRootForm(path string, fields url.Values) (*FileValidationResponse, 
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-
-	if responseHTTP.StatusCode != 201 && responseHTTP.StatusCode != 200 {
-		return nil, handleErrorPayload(responseHTTP)
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
 	}
-
 	responseObject := &FileValidationResponse{}
-	if err = json.NewDecoder(responseHTTP.Body).Decode(responseObject); err != nil {
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, responseObject); err != nil {
 		return nil, err
 	}
 	return responseObject, nil
 }
 
 func bulkRootFileStatus(baseURL, fileID string) (*FileStatusResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(fileID) == "" {
 		return nil, fmt.Errorf("empty parameter: file_id")
 	}
@@ -128,18 +137,21 @@ func bulkRootFileStatus(baseURL, fileID string) (*FileStatusResponse, error) {
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	if responseHTTP.StatusCode != 200 {
-		return nil, handleErrorPayload(responseHTTP)
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
 	}
-
 	responseObject := &FileStatusResponse{}
-	if err = json.NewDecoder(responseHTTP.Body).Decode(responseObject); err != nil {
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, responseObject); err != nil {
 		return nil, err
 	}
 	return responseObject, nil
 }
 
 func bulkRootResultFetch(baseURL, fileID string, fileWriter io.Writer) error {
+	if err := packageConfig().requireKey(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(fileID) == "" {
 		return fmt.Errorf("empty parameter: file_id")
 	}
@@ -165,21 +177,8 @@ func bulkRootResultFetch(baseURL, fileID string, fileWriter io.Writer) error {
 	}
 
 	bodyStr := string(body)
-	ct := responseHTTP.Header.Get("Content-Type")
-
-	if responseHTTP.StatusCode != 200 {
-		trim := strings.TrimSpace(bodyStr)
-		if strings.HasPrefix(trim, "{") {
-			return fmt.Errorf("%s", FormatGetFileErrorMessage(trim))
-		}
-		if trim == "" {
-			return fmt.Errorf("HTTP %d", responseHTTP.StatusCode)
-		}
-		return fmt.Errorf("%s", trim)
-	}
-
-	if shouldTreatGetFileBodyAsError(bodyStr, ct) {
-		return fmt.Errorf("%s", FormatGetFileErrorMessage(strings.TrimSpace(bodyStr)))
+	if err = getFileBodyError(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), bodyStr); err != nil {
+		return err
 	}
 
 	_, err = fileWriter.Write(body)
@@ -187,6 +186,9 @@ func bulkRootResultFetch(baseURL, fileID string, fileWriter io.Writer) error {
 }
 
 func bulkRootFileDelete(baseURL, fileID string) (*FileValidationResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(fileID) == "" {
 		return nil, fmt.Errorf("empty parameter: file_id")
 	}
@@ -205,12 +207,12 @@ func bulkRootFileDelete(baseURL, fileID string) (*FileValidationResponse, error)
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	if responseHTTP.StatusCode != 200 {
-		return nil, handleErrorPayload(responseHTTP)
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
 	}
-
 	responseObject := &FileValidationResponse{}
-	if err = json.NewDecoder(responseHTTP.Body).Decode(responseObject); err != nil {
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, responseObject); err != nil {
 		return nil, err
 	}
 	responseObject.FileId = fileID

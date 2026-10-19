@@ -1,7 +1,6 @@
 package zerobouncego
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -22,10 +21,8 @@ type EmailFinderCsvFile struct {
 
 func (f EmailFinderCsvFile) multipartFields() map[string]string {
 	fields := map[string]string{
-		"domain_column": fmt.Sprintf("%d", f.DomainColumn),
-	}
-	if f.HasHeaderRow {
-		fields["has_header_row"] = formatBoolField(true)
+		"domain_column":  fmt.Sprintf("%d", f.DomainColumn),
+		"has_header_row": formatBoolField(f.HasHeaderRow),
 	}
 	if v, ok := optionalIntField(f.FirstNameColumn); ok {
 		fields["first_name_column"] = v
@@ -86,10 +83,8 @@ func BulkDomainSearchSubmit(file DomainSearchCsvFile) (*FileValidationResponse, 
 		return nil, fmt.Errorf("empty parameter: file")
 	}
 	fields := map[string]string{
-		"domain_column": fmt.Sprintf("%d", file.DomainColumn),
-	}
-	if file.HasHeaderRow {
-		fields["has_header_row"] = formatBoolField(true)
+		"domain_column":  fmt.Sprintf("%d", file.DomainColumn),
+		"has_header_row": formatBoolField(file.HasHeaderRow),
 	}
 	requestURL, err := url.JoinPath(domainSearchBaseURL(), "sendfile")
 	if err != nil {
@@ -112,9 +107,9 @@ func BulkDomainSearchFileDelete(fileID string) (*FileValidationResponse, error) 
 
 // ListEvaluatorCsvFile input for list evaluator sendfile.
 type ListEvaluatorCsvFile struct {
-	File                io.Reader
-	FileName            string
-	EmailAddressColumn  int
+	File               io.Reader
+	FileName           string
+	EmailAddressColumn int
 }
 
 // ListEvaluatorSubmit uploads a CSV for list evaluation.
@@ -138,6 +133,9 @@ func ListEvaluatorSubmit(file ListEvaluatorCsvFile) (*FileValidationResponse, er
 
 // GetListEvaluatorResult fetches list evaluator job status/result metadata.
 func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(fileID) == "" {
 		return nil, fmt.Errorf("empty parameter: file_id")
 	}
@@ -156,12 +154,12 @@ func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	if responseHTTP.StatusCode != 200 {
-		return nil, handleErrorPayload(responseHTTP)
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
 	}
-
 	result := map[string]interface{}{}
-	if err = json.NewDecoder(responseHTTP.Body).Decode(&result); err != nil {
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -269,6 +267,9 @@ type ListS3FilesOptions struct {
 
 // ListS3Files lists S3 objects available for validation or scoring.
 func ListS3Files(opts ListS3FilesOptions) ([]S3ListFileEntry, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 	if strings.TrimSpace(opts.Bucket) != "" {
@@ -287,11 +288,12 @@ func ListS3Files(opts ListS3FilesOptions) ([]S3ListFileEntry, error) {
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	if responseHTTP.StatusCode != 200 {
-		return nil, handleErrorPayload(responseHTTP)
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
 	}
 	var entries []S3ListFileEntry
-	if err = json.NewDecoder(responseHTTP.Body).Decode(&entries); err != nil {
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, &entries); err != nil {
 		return nil, err
 	}
 	return entries, nil

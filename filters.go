@@ -60,17 +60,21 @@ func postFilterForm(endpoint string, form url.Values) (map[string]interface{}, e
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	if responseHTTP.StatusCode != 200 {
-		return nil, ErrorFromResponse(responseHTTP)
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
 	}
 	result := map[string]interface{}{}
-	if err = json.NewDecoder(responseHTTP.Body).Decode(&result); err != nil {
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
 func postFilterRequest(endpoint string, form url.Values) (*http.Response, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	if form == nil {
 		form = url.Values{}
 	}
@@ -86,11 +90,11 @@ func postFilterRequest(endpoint string, form url.Values) (*http.Response, error)
 
 func readFilterResponseBody(responseHTTP *http.Response) (json.RawMessage, error) {
 	defer responseHTTP.Body.Close()
-	if responseHTTP.StatusCode != 200 {
-		return nil, ErrorFromResponse(responseHTTP)
-	}
 	body, err := io.ReadAll(responseHTTP.Body)
 	if err != nil {
+		return nil, err
+	}
+	if err = ensureJSONAPIBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body); err != nil {
 		return nil, err
 	}
 	return json.RawMessage(body), nil
