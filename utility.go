@@ -84,6 +84,7 @@ const (
 	SS_BLOCKED                     = "blocked"
 	SS_ALLOWED                     = "allowed"
 	SS_GOLD                        = "gold"
+	SS_AI_AGENT_MAILBOX            = "ai_agent_mailbox"
 )
 
 const (

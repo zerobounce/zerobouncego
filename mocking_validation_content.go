@@ -673,4 +673,19 @@ var MOCK_VALIDATE_RESPONSE = map[string]string{
 		"zipcode": "33401",
 		"processed_at": "2023-03-23 12:30:31.961"
 	}`,
+	"ai_agent_mailbox_valid@example.com": `{
+		"address": "ai_agent_mailbox_valid@example.com",
+		"status": "valid",
+		"sub_status": "ai_agent_mailbox"
+	}`,
+	"ai_agent_mailbox_catch_all@example.com": `{
+		"address": "ai_agent_mailbox_catch_all@example.com",
+		"status": "catch-all",
+		"sub_status": "ai_agent_mailbox"
+	}`,
+	"future_sub_status@example.com": `{
+		"address": "future_sub_status@example.com",
+		"status": "valid",
+		"sub_status": "some_future_sub_status"
+	}`,
 }
