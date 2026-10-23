@@ -123,7 +123,7 @@ func ListEvaluatorSubmit(file ListEvaluatorCsvFile) (*FileValidationResponse, er
 	fields := map[string]string{
 		"email_address_column": fmt.Sprintf("%d", file.EmailAddressColumn),
 	}
-	requestURL, err := url.JoinPath(bulkV2Base(), "listevaluator")
+	requestURL, err := url.JoinPath(LIST_EVALUATOR_URI, "")
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,9 @@ func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 
-	requestURL, err := url.JoinPath(bulkV2Base(), "listevaluator", fileID)
+	// The list evaluator has its own base URL, not a path built from BULK_URI,
+	// and the file id is one path segment, so a slash in it must stay encoded.
+	requestURL, err := url.JoinPath(LIST_EVALUATOR_URI, url.PathEscape(strings.TrimSpace(fileID)))
 	if err != nil {
 		return nil, err
 	}

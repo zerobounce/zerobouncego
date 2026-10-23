@@ -35,18 +35,26 @@ type ValidateResponse struct {
 	DomainAgeDays   null.String `json:"domain_age_days"`
 	ActiveInDays    null.String `json:"active_in_days"`
 	ActiveFirstSeen null.String `json:"active_first_seen"`
-	SMTPProvider    null.String `json:"smtp_provider"`
-	CatchallDomain  null.Bool   `json:"catchall_domain"`
-	MxRecord        string      `json:"mx_record"`
-	MxFound         string      `json:"mx_found"`
-	Firstname       null.String `json:"firstname"`
-	Lastname        null.String `json:"lastname"`
-	Gender          null.String `json:"gender"`
-	Country         null.String `json:"country"`
-	Region          null.String `json:"region"`
-	City            null.String `json:"city"`
-	Zipcode         null.String `json:"zipcode"`
-	RawProcessedAt  string      `json:"processed_at"`
+
+	// DomainWebsiteExists and DomainRegistrantCompanyName come back with domain_info.
+	DomainWebsiteExists         null.String `json:"domain_website_exists"`
+	DomainRegistrantCompanyName null.String `json:"domain_registrant_company_name"`
+
+	// Message is the API's "Message" key, returned instead of a result while a
+	// greylist retry is still running.
+	Message        string      `json:"Message"`
+	SMTPProvider   null.String `json:"smtp_provider"`
+	CatchallDomain null.Bool   `json:"catchall_domain"`
+	MxRecord       string      `json:"mx_record"`
+	MxFound        string      `json:"mx_found"`
+	Firstname      null.String `json:"firstname"`
+	Lastname       null.String `json:"lastname"`
+	Gender         null.String `json:"gender"`
+	Country        null.String `json:"country"`
+	Region         null.String `json:"region"`
+	City           null.String `json:"city"`
+	Zipcode        null.String `json:"zipcode"`
+	RawProcessedAt string      `json:"processed_at"`
 }
 
 func (v ValidateResponse) ProcessedAt() (time.Time, error) {
@@ -152,7 +160,15 @@ type ValidateOptions struct {
 	Timeout      string
 	ActivityData *bool
 	VerifyPlus   *bool
-	UsePost      bool
+	// DomainInfo fills DomainWebsiteExists and DomainRegistrantCompanyName.
+	DomainInfo *bool
+	// GreylistProcessing retries a greylisted address in the background.
+	GreylistProcessing *bool
+	// CallbackURL is where the greylist retry posts its result. It needs
+	// GreylistProcessing set to true and is rejected without it, and when
+	// blank, before any request is sent.
+	CallbackURL string
+	UsePost     bool
 }
 
 // Validate validates a single email
@@ -175,6 +191,16 @@ func validateWithOptions(cfg RequestConfig, email string, opts ValidateOptions) 
 			return nil, fmt.Errorf("Invalid parameter: timeout (must be between 3 and 60 seconds)")
 		}
 	}
+	if opts.CallbackURL != "" {
+		if strings.TrimSpace(opts.CallbackURL) == "" {
+			return nil, fmt.Errorf("empty parameter: callback_url")
+		}
+		// The callback is where the greylist retry posts its result, so it is
+		// meaningless - and rejected by the API - without the retry itself.
+		if opts.GreylistProcessing == nil || !*opts.GreylistProcessing {
+			return nil, fmt.Errorf("callback_url requires greylist_processing to be true")
+		}
+	}
 
 	params := url.Values{}
 	params.Set("email", email)
@@ -187,6 +213,15 @@ func validateWithOptions(cfg RequestConfig, email string, opts ValidateOptions) 
 	}
 	if opts.VerifyPlus != nil {
 		params.Set("verify_plus", fmt.Sprintf("%t", *opts.VerifyPlus))
+	}
+	if opts.DomainInfo != nil {
+		params.Set("domain_info", fmt.Sprintf("%t", *opts.DomainInfo))
+	}
+	if opts.GreylistProcessing != nil {
+		params.Set("greylist_processing", fmt.Sprintf("%t", *opts.GreylistProcessing))
+	}
+	if opts.CallbackURL != "" {
+		params.Set("callback_url", opts.CallbackURL)
 	}
 
 	response := &ValidateResponse{}

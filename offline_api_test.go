@@ -236,12 +236,16 @@ func useFake(t *testing.T) *fakeTransport {
 	previousKey := API_KEY
 	previousURI := URI
 	previousBulk := BULK_URI
+	previousEvaluator := LIST_EVALUATOR_URI
+	previousPlacement := INBOX_PLACEMENT_URI
 	http.DefaultTransport = fake
 	t.Cleanup(func() {
 		http.DefaultTransport = previous
 		API_KEY = previousKey
 		URI = previousURI
 		BULK_URI = previousBulk
+		LIST_EVALUATOR_URI = previousEvaluator
+		INBOX_PLACEMENT_URI = previousPlacement
 	})
 	return fake
 }
