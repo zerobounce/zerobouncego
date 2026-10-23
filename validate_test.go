@@ -152,27 +152,9 @@ func TestResponseSubStatusRoleBasedAcceptAll(t *testing.T) {
 
 func TestMockBulkValidationNoApiKey(t *testing.T) {
 	Initialize("")
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
-	mockBatchValidateRequest()
-
-	bulk_response, error_ := ValidateBatch(EmailsToValidate())
-	if error_ != nil {
-		t.Error(error_.Error())
-	}
-	if !assert.Len(t, bulk_response.EmailBatch, 0) {
-		t.FailNow()
-	}
-	if !assert.Len(t, bulk_response.Errors, 1) {
-		t.FailNow()
-	}
-	response_error := bulk_response.Errors[0]
-	if !assert.Equal(t, response_error.EmailAddress, "all") {
-		t.FailNow()
-	}
-	if !assert.Contains(t, response_error.Error, "Invalid API Key") {
-		t.FailNow()
-	}
+	_, error_ := ValidateBatch(EmailsToValidate())
+	assert.NotNil(t, error_)
+	assert.Contains(t, error_.Error(), "api_key")
 }
 
 func TestMockBulkValidationNoEmails(t *testing.T) {

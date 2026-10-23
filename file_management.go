@@ -2,7 +2,6 @@ package zerobouncego
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -89,10 +88,15 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer, v
 		multipart_writer.WriteField("return_url", csv_file.ReturnURL)
 	}
 
-	// add column-related fields
-	columns_mapping := csv_file.ColumnsMapping()
-	for column_key := range columns_mapping {
-		multipart_writer.WriteField(column_key, fmt.Sprintf("%d", columns_mapping[column_key]))
+	// Name, gender, and IP columns are validation sendfile fields. Scoring sendfile
+	// only receives the required email column. 0 still means "leave this optional column out".
+	if validationSendfile {
+		columns_mapping := csv_file.ColumnsMapping()
+		for column_key, column_value := range columns_mapping {
+			multipart_writer.WriteField(column_key, fmt.Sprintf("%d", column_value))
+		}
+	} else {
+		multipart_writer.WriteField("email_address_column", fmt.Sprintf("%d", csv_file.EmailAddressColumn))
 	}
 
 	if validationSendfile && csv_file.AllowPhase2 != nil {
@@ -129,14 +133,14 @@ type FileValidationResponse struct {
 
 // BulkValidationFileStatus - response payload after a file status check
 type FileStatusResponse struct {
-	Success            bool   `json:"success"`
-	FileId             string `json:"file_id"`
-	FileName           string `json:"file_name"`
-	UploadDateRaw      string `json:"upload_date"`
-	FileStatus         string `json:"file_status"`
-	CompletePercentage string `json:"complete_percentage"`
+	Success            bool    `json:"success"`
+	FileId             string  `json:"file_id"`
+	FileName           string  `json:"file_name"`
+	UploadDateRaw      string  `json:"upload_date"`
+	FileStatus         string  `json:"file_status"`
+	CompletePercentage string  `json:"complete_percentage"`
 	FilePhase2Status   *string `json:"file_phase_2_status,omitempty"`
-	ReturnUrl          string `json:"return_url"`
+	ReturnUrl          string  `json:"return_url"`
 }
 
 // Percentage - provide the percentage, from a response payload, as a float
@@ -187,6 +191,12 @@ func GenericFileSubmit(
 	remove_duplicate bool,
 	endpoint string,
 ) (*FileValidationResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
+	if csv_file.File == nil {
+		return nil, errors.New("empty parameter: file")
+	}
 	var multipart_buffer *bytes.Buffer = &bytes.Buffer{}
 	var error_ error
 
@@ -213,17 +223,20 @@ func GenericFileSubmit(
 		return nil, error_
 	}
 
-	// INTERPRET RESPONSE
 	defer response_http.Body.Close()
-	if response_http.StatusCode != 201 {
-		return nil, handleErrorPayload(response_http)
-	}
-
-	// 201 OK
-	response_object := &FileValidationResponse{}
-	error_ = json.NewDecoder(response_http.Body).Decode(response_object)
+	body, error_ := io.ReadAll(response_http.Body)
 	if error_ != nil {
 		return nil, error_
+	}
+	response_object := &FileValidationResponse{}
+	if error_ = decodeJSONBody(response_http.StatusCode, response_http.Header.Get("Content-Type"), body, response_object); error_ != nil {
+		if response_http.StatusCode != 201 {
+			return nil, error_
+		}
+		return nil, error_
+	}
+	if response_http.StatusCode != 201 {
+		return nil, errors.New(messageFromBody(response_http.StatusCode, response_http.Header.Get("Content-Type"), string(body)))
 	}
 	return response_object, nil
 }
@@ -231,6 +244,9 @@ func GenericFileSubmit(
 // GenericFileStatusCheck - check the percentage of completion of a file uploaded
 // for the operation represented by the given endpoint
 func GenericFileStatusCheck(file_id, endpoint string) (*FileStatusResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	var error_ error
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
@@ -248,16 +264,13 @@ func GenericFileStatusCheck(file_id, endpoint string) (*FileStatusResponse, erro
 		return nil, error_
 	}
 
-	// Error response
 	defer response_http.Body.Close()
-	if response_http.StatusCode != 200 {
-		return nil, handleErrorPayload(response_http)
-	}
-
-	// OK response
-	response_object := &FileStatusResponse{}
-	error_ = json.NewDecoder(response_http.Body).Decode(response_object)
+	body, error_ := io.ReadAll(response_http.Body)
 	if error_ != nil {
+		return nil, error_
+	}
+	response_object := &FileStatusResponse{}
+	if error_ = decodeJSONBody(response_http.StatusCode, response_http.Header.Get("Content-Type"), body, response_object); error_ != nil {
 		return nil, error_
 	}
 	return response_object, nil
@@ -270,6 +283,9 @@ func isScoringBulkEndpoint(endpoint string) bool {
 
 // genericResultFetch implements bulk getfile with optional v2 query params and JSON error handling.
 func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *GetFileOptions, scoring bool) error {
+	if err := packageConfig().requireKey(); err != nil {
+		return err
+	}
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", file_id)
@@ -300,20 +316,8 @@ func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *G
 
 	bodyStr := string(body)
 	ct := response_http.Header.Get("Content-Type")
-
-	if response_http.StatusCode != 200 {
-		trim := strings.TrimSpace(bodyStr)
-		if strings.HasPrefix(trim, "{") {
-			return fmt.Errorf("%s", FormatGetFileErrorMessage(trim))
-		}
-		if trim == "" {
-			return fmt.Errorf("HTTP %d", response_http.StatusCode)
-		}
-		return fmt.Errorf("%s", trim)
-	}
-
-	if shouldTreatGetFileBodyAsError(bodyStr, ct) {
-		return fmt.Errorf("%s", FormatGetFileErrorMessage(strings.TrimSpace(bodyStr)))
+	if err = getFileBodyError(response_http.StatusCode, ct, bodyStr); err != nil {
+		return err
 	}
 
 	_, err = file_writer.Write(body)
@@ -335,6 +339,9 @@ func GenericResultFetchWithOptions(file_id, endpoint string, file_writer io.Writ
 
 // GenericFileDelete - delete the result file associated with a file ID
 func GenericFileDelete(file_id, endpoint string) (*FileValidationResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", file_id)
@@ -349,15 +356,13 @@ func GenericFileDelete(file_id, endpoint string) (*FileValidationResponse, error
 	if error_ != nil {
 		return nil, error_
 	}
-	if response_http.StatusCode != 200 {
-		return nil, handleErrorPayload(response_http)
-	}
-
 	defer response_http.Body.Close()
-	// only `Success` and `Message` are of interest
-	response_object := &FileValidationResponse{}
-	error_ = json.NewDecoder(response_http.Body).Decode(response_object)
+	body, error_ := io.ReadAll(response_http.Body)
 	if error_ != nil {
+		return nil, error_
+	}
+	response_object := &FileValidationResponse{}
+	if error_ = decodeJSONBody(response_http.StatusCode, response_http.Header.Get("Content-Type"), body, response_object); error_ != nil {
 		return nil, error_
 	}
 
