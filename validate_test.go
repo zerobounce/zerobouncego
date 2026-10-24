@@ -150,6 +150,44 @@ func TestResponseSubStatusRoleBasedAcceptAll(t *testing.T) {
 	assert.Equal(t, "role_based_accept_all", response.SubStatus)
 }
 
+func TestResponseSubStatusAiAgentMailboxValid(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	mockValidateRequest()
+
+	response, error_ := ValidateWithTimeout("ai_agent_mailbox_valid@example.com", SANDBOX_IP, "10")
+	assert.Nil(t, error_)
+	assert.Equal(t, "valid", response.Status)
+	assert.Equal(t, ValidateSubStatusAiAgentMailbox, response.SubStatus)
+}
+
+func TestResponseSubStatusAiAgentMailboxCatchAll(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	mockValidateRequest()
+
+	response, error_ := ValidateWithTimeout("ai_agent_mailbox_catch_all@example.com", SANDBOX_IP, "10")
+	assert.Nil(t, error_)
+	assert.Equal(t, "catch-all", response.Status)
+	assert.Equal(t, ValidateSubStatusAiAgentMailbox, response.SubStatus)
+}
+
+// SubStatus is a plain string, so a value this SDK predates reaches the caller
+// untouched rather than being dropped or erroring.
+func TestResponseUnknownSubStatusPassesThrough(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	mockValidateRequest()
+
+	response, error_ := ValidateWithTimeout("future_sub_status@example.com", SANDBOX_IP, "10")
+	assert.Nil(t, error_)
+	assert.Equal(t, "valid", response.Status)
+	assert.Equal(t, "some_future_sub_status", response.SubStatus)
+}
+
 func TestMockBulkValidationNoApiKey(t *testing.T) {
 	Initialize("")
 	_, error_ := ValidateBatch(EmailsToValidate())

@@ -10,6 +10,24 @@ import (
 
 const maxJSONBodyBytes = 2 << 20
 
+// ZBApiError is a failed API response. It carries the HTTP status so callers
+// can tell a 403 (Cloudflare) from a 400/404 (API) or a 429 (Warmup rate
+// limit). Both the validation client and the Warmup client return it.
+type ZBApiError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *ZBApiError) Error() string { return e.Message }
+
+// apiError builds a ZBApiError, or nil when there is no message.
+func apiError(statusCode int, message string) error {
+	if message == "" {
+		return nil
+	}
+	return &ZBApiError{StatusCode: statusCode, Message: message}
+}
+
 // RequestConfig is the API key and base URLs for one caller.
 // Package functions use the process-wide key. A Client keeps its own copy.
 type RequestConfig struct {
@@ -165,7 +183,29 @@ func ensureJSONAPIBody(status int, contentType string, body []byte) error {
 	if trimmed[0] != '{' && trimmed[0] != '[' {
 		return errors.New(messageFromBody(status, contentType, text))
 	}
+	// {"success": false, ...} on an HTTP 200 is a failure, not a result. The
+	// live API answers an unknown file id that way, with a 200.
+	if trimmed[0] == '{' {
+		var probe map[string]interface{}
+		if json.Unmarshal(body, &probe) == nil {
+			if failed, found := probe["success"]; found && isFalsyAPISuccess(failed) {
+				return apiError(status, messageFromBody(status, contentType, text))
+			}
+		}
+	}
 	return nil
+}
+
+// isFalsyAPISuccess reports whether a "success" field means failure. The API
+// sends it as a JSON false, "false" or "False" depending on the endpoint.
+func isFalsyAPISuccess(value interface{}) bool {
+	switch typed := value.(type) {
+	case bool:
+		return !typed
+	case string:
+		return strings.EqualFold(typed, "false")
+	}
+	return false
 }
 
 func decodeJSONBody(status int, contentType string, body []byte, dest interface{}) error {

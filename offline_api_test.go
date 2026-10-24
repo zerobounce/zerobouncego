@@ -20,7 +20,10 @@ type recordedRequest struct {
 	Host   string
 	Path   string
 	APIKey string
-	Fields map[string]string
+	// The Inbox Placement Tester authenticates with a Bearer header rather than
+	// an api_key parameter, so the key can arrive either way.
+	Authorization string
+	Fields        map[string]string
 }
 
 type fakeTransport struct {
@@ -106,12 +109,17 @@ func recordHTTPRequest(req *http.Request) recordedRequest {
 		}
 	}
 	apiKey := fields["api_key"]
+	authorization := req.Header.Get("Authorization")
+	if apiKey == "" && strings.HasPrefix(authorization, "Bearer ") {
+		apiKey = strings.TrimPrefix(authorization, "Bearer ")
+	}
 	return recordedRequest{
-		Method: req.Method,
-		Host:   req.URL.Host,
-		Path:   req.URL.Path,
-		APIKey: apiKey,
-		Fields: fields,
+		Method:        req.Method,
+		Host:          req.URL.Host,
+		Path:          req.URL.Path,
+		APIKey:        apiKey,
+		Authorization: authorization,
+		Fields:        fields,
 	}
 }
 
@@ -236,12 +244,16 @@ func useFake(t *testing.T) *fakeTransport {
 	previousKey := API_KEY
 	previousURI := URI
 	previousBulk := BULK_URI
+	previousEvaluator := LIST_EVALUATOR_URI
+	previousPlacement := INBOX_PLACEMENT_URI
 	http.DefaultTransport = fake
 	t.Cleanup(func() {
 		http.DefaultTransport = previous
 		API_KEY = previousKey
 		URI = previousURI
 		BULK_URI = previousBulk
+		LIST_EVALUATOR_URI = previousEvaluator
+		INBOX_PLACEMENT_URI = previousPlacement
 	})
 	return fake
 }
@@ -708,11 +720,16 @@ func TestOfflinePriority3(t *testing.T) {
 		t.Fatal("evaluator result path")
 	}
 	fake.clear()
-	if _, err = SendEvaluatedFile(strings.NewReader("a@example.com\n"), "evaluated.csv"); err != nil {
+	// LIVE: this takes the evaluator's file_id as a form field, not an upload.
+	if _, err = SendEvaluatedFile("eval-file-1"); err != nil {
 		t.Fatal(err)
 	}
-	if onlyRequest(t, fake).Path != "/v2/send-evaluated-file/" {
+	evaluated := onlyRequest(t, fake)
+	if evaluated.Path != "/v2/send-evaluated-file/" {
 		t.Fatal("evaluated path")
+	}
+	if evaluated.Fields["file_id"] != "eval-file-1" {
+		t.Fatalf("file_id not sent: %+v", evaluated.Fields)
 	}
 
 	fake.clear()
@@ -1000,8 +1017,8 @@ func TestOfflineNilFileRejectedBeforeRequest(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "file") {
 		t.Fatalf("nil file: %v", err)
 	}
-	if _, err = SendEvaluatedFile(nil, "evaluated.csv"); err == nil || !strings.Contains(err.Error(), "file") {
-		t.Fatalf("nil evaluated file: %v", err)
+	if _, err = SendEvaluatedFile("  "); err == nil || !strings.Contains(err.Error(), "file_id") {
+		t.Fatalf("blank evaluated file id: %v", err)
 	}
 	if fake.size() != 0 {
 		t.Fatalf("nil file sent %d requests", fake.size())

@@ -60,3 +60,6 @@ Publishing and pushing tags need a maintainer's explicit approval. Do not bump t
 2. Set the same version in `Version` in `version.go`. The publish workflow fails if it differs from the tag. Do not edit `go.mod` for a version bump. The module line must stay `github.com/zerobounce/zerobouncego/v2` for every 2.y.z tag.
 3. `go test -short -count=1 .`
 4. Tag `vx.y.z` on that commit and run the Publish workflow with that tag. It creates the GitHub release. proxy.golang.org indexes the tag; the workflow waits until `https://proxy.golang.org/github.com/zerobounce/zerobouncego/v2/@v/vx.y.z.info` returns 200.
+
+- **Four base URLs.** `URI`, `BULK_URI` (ends in `/v2/`), plus `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI`. The last two are separate values rather than paths built from `BULK_URI`, and `SetURI` does not touch them. The S3/SFTP jobs use `bulkAPIRoot()`, which strips the `/v2`.
+- **Two bulk shapes are easy to get wrong.** `ValidateSFTPFile`'s `FileName` is optional — leaving it empty uses the input bucket from the account's settings, and every other job requires it. `ExportSFTPFile` sends `export_path`, not the `export_bucket` that `ExportS3File` sends.

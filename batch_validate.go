@@ -64,7 +64,11 @@ func validateBatchWithOptions(cfg RequestConfig, emails_list []EmailToValidate, 
 	}
 	if opts != nil {
 		if opts.Timeout != nil {
-			payload_data["timeout"] = *opts.Timeout
+			// LIVE: the API requires timeout as a JSON string ("30"). As a
+			// number it rejects the whole batch with the account-level
+			// "Invalid API Key or your account ran out of credits" error.
+			// activity_data and verify_plus stay JSON booleans.
+			payload_data["timeout"] = fmt.Sprintf("%d", *opts.Timeout)
 		}
 		if opts.ActivityData != nil {
 			payload_data["activity_data"] = *opts.ActivityData

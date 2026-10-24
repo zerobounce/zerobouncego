@@ -84,6 +84,7 @@ const (
 	SS_BLOCKED                     = "blocked"
 	SS_ALLOWED                     = "allowed"
 	SS_GOLD                        = "gold"
+	SS_AI_AGENT_MAILBOX            = "ai_agent_mailbox"
 )
 
 const (
@@ -116,6 +117,11 @@ var (
 	// URI used to make requests to the ZeroBounce API
 	URI      = Getenv(`ZERO_BOUNCE_URI`, `https://api.zerobounce.net/v2/`)
 	BULK_URI = Getenv(`ZERO_BOUNCE_BULK_URI`, `https://bulkapi.zerobounce.net/v2/`)
+	// LIST_EVALUATOR_URI and INBOX_PLACEMENT_URI are separate hosts, not paths
+	// built from BULK_URI. SetURI does not touch them, so a test that only
+	// overrides URI and BULK_URI would still reach the live API.
+	LIST_EVALUATOR_URI  = Getenv(`ZERO_BOUNCE_LIST_EVALUATOR_URI`, `https://bulkapi.zerobounce.net/v2/listevaluator`)
+	INBOX_PLACEMENT_URI = Getenv(`ZERO_BOUNCE_INBOX_PLACEMENT_URI`, `https://bulkapi.zerobounce.net/api/ipt`)
 
 	// API_KEY the API key used in order to make the requests (from ZEROBOUNCE_API_KEY or ZERO_BOUNCE_API_KEY)
 	API_KEY string = getAPIKeyFromEnv()

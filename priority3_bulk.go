@@ -123,7 +123,7 @@ func ListEvaluatorSubmit(file ListEvaluatorCsvFile) (*FileValidationResponse, er
 	fields := map[string]string{
 		"email_address_column": fmt.Sprintf("%d", file.EmailAddressColumn),
 	}
-	requestURL, err := url.JoinPath(bulkV2Base(), "listevaluator")
+	requestURL, err := url.JoinPath(LIST_EVALUATOR_URI, "")
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,9 @@ func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
 
-	requestURL, err := url.JoinPath(bulkV2Base(), "listevaluator", fileID)
+	// The list evaluator has its own base URL, not a path built from BULK_URI,
+	// and the file id is one path segment, so a slash in it must stay encoded.
+	requestURL, err := url.JoinPath(LIST_EVALUATOR_URI, url.PathEscape(strings.TrimSpace(fileID)))
 	if err != nil {
 		return nil, err
 	}
@@ -165,17 +167,25 @@ func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-// SendEvaluatedFile uploads a pre-evaluated list file.
-func SendEvaluatedFile(file io.Reader, fileName string) (*FileValidationResponse, error) {
-	if file == nil {
-		return nil, fmt.Errorf("empty parameter: file")
+// SendEvaluatedFile submits a finished evaluation for validation.
+//
+// LIVE: this takes the list evaluator's file_id as a form field, not a file
+// upload as the docs describe — an upload is rejected with
+// "file_id: This field is required". It returns a new validation job's file_id,
+// which answers "File cannot be found" for a short while after it is accepted.
+func SendEvaluatedFile(fileID string) (*FileValidationResponse, error) {
+	if strings.TrimSpace(fileID) == "" {
+		return nil, fmt.Errorf("empty parameter: file_id")
 	}
 	requestURL, err := url.JoinPath(bulkV2Base(), "send-evaluated-file")
 	if err != nil {
 		return nil, err
 	}
 	requestURL += "/"
-	return postBulkRootMultipart(requestURL, file, fileName, map[string]string{})
+
+	fields := url.Values{}
+	fields.Set("file_id", fileID)
+	return postBulkRootFormAt(requestURL, fields)
 }
 
 // ValidateS3FileOptions optional fields for validateS3file.
