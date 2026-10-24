@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The api-usage response now reads `sub_status_leading_period_removed` and `sub_status_alias_address`, two counters the API returns that were silently discarded.
+
 - `ValidateBatch` posts to `api.zerobounce.net/v2/validatebatch` instead of `bulkapi.zerobounce.net`.
 - A 403 HTML "Access denied" page is returned as a short error. An HTML page with status 200 is an error as well, including `BulkValidationResult`, `BulkEmailFinderResult`, and `BulkDomainSearchResult`, instead of a saved CSV or a JSON parse.
 - Empty and non-JSON bodies are a short error. A repeated `Error:` / `[Error]:` prefix is removed.

@@ -138,6 +138,10 @@ type ApiUsageResponse struct {
 	SubStatusGold int `json:"sub_status_gold"`
 	// Total number of times the API has a sub status of "role_based_accept_all"
 	SubStatusRoleBasedAcceptAll int `json:"sub_status_role_based_accept_all"`
+	// Total emails with a leading period that was removed
+	SubStatusLeadingPeriodRemoved int `json:"sub_status_leading_period_removed"`
+	// Total number of times the API has a sub status of "alias_address"
+	SubStatusAliasAddress int `json:"sub_status_alias_address"`
 	// Start date of query.
 	RawStartDate string `json:"start_date"`
 	// End date of query.
