@@ -246,6 +246,7 @@ func TestScoringStatus200NotSuccess(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
+	// {"success": false} on an HTTP 200 is a failure, not a result.
 	mockOkResponse(
 		"GET",
 		ENDPOINT_SCORING_STATUS,
@@ -253,13 +254,14 @@ func TestScoringStatus200NotSuccess(t *testing.T) {
 	)
 
 	response_object, error_ := AiScoringFileStatus(testing_file_id)
-	if !assert.Nil(t, error_) {
+	assert.Nil(t, response_object)
+	if !assert.NotNil(t, error_) {
 		t.FailNow()
 	}
-	if !assert.NotNil(t, response_object) {
-		t.FailNow()
+	var apiErr *ZBApiError
+	if assert.ErrorAs(t, error_, &apiErr) {
+		assert.Equal(t, 200, apiErr.StatusCode)
 	}
-	assert.Equal(t, false, response_object.Success)
 }
 
 // TestScoringStatus200Success - process expected to go accordingly
@@ -343,13 +345,17 @@ func TestScoringDelete200NotSuccess(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
+	// {"success": false} on an HTTP 200 is a failure, not a result.
 	mockOkResponse("GET", ENDPOINT_SCORING_DELETE, sample_scoring_delete_200_invalid)
 	response_object, error_ := AiScoringFileDelete(testing_file_id)
-	assert.Nil(t, error_)
-	if !assert.NotNil(t, response_object) {
+	assert.Nil(t, response_object)
+	if !assert.NotNil(t, error_) {
 		t.FailNow()
 	}
-	assert.Equal(t, false, response_object.Success)
+	var apiErr *ZBApiError
+	if assert.ErrorAs(t, error_, &apiErr) {
+		assert.Equal(t, 200, apiErr.StatusCode)
+	}
 }
 
 // TestScoringDelete200Success - process expected to go accordingly

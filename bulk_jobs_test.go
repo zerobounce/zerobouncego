@@ -94,6 +94,7 @@ func TestOfflineS3AndSftpFileJobsSendTheDocumentedFieldsOnly(t *testing.T) {
 	if _, err := EmailFinderS3File(BulkFileJobOptions{
 		FileName:     "lists/leads.csv",
 		HasHeaderRow: true,
+		ReturnURL:    "https://example.com/done",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -105,14 +106,15 @@ func TestOfflineS3AndSftpFileJobsSendTheDocumentedFieldsOnly(t *testing.T) {
 	if request.Path != "/emailFinderS3file" {
 		t.Fatalf("path = %s", request.Path)
 	}
-	if request.Fields["file_name"] != "lists/leads.csv" || request.Fields["has_header_row"] != "true" {
+	// LIVE: file_name, has_header_row and return_url are all required.
+	if request.Fields["file_name"] != "lists/leads.csv" ||
+		request.Fields["has_header_row"] != "true" ||
+		request.Fields["return_url"] != "https://example.com/done" {
 		t.Fatalf("%+v", request.Fields)
 	}
-	// Unset options stay off the request entirely.
-	for _, absent := range []string{"remove_duplicates", "return_url"} {
-		if _, found := request.Fields[absent]; found {
-			t.Fatalf("%s should not be sent: %+v", absent, request.Fields)
-		}
+	// remove_duplicates is the only one of the four that stays optional.
+	if _, found := request.Fields["remove_duplicates"]; found {
+		t.Fatalf("remove_duplicates should not be sent: %+v", request.Fields)
 	}
 
 	fake.clear()
@@ -133,24 +135,28 @@ func TestOfflineS3AndSftpFileJobsSendTheDocumentedFieldsOnly(t *testing.T) {
 		t.Fatalf("%+v", request)
 	}
 
-	// file_name is optional for validateSFTPfile alone: without it the input
-	// bucket from the account's settings is used.
+	// LIVE: validateSFTPfile needs file_name too, although the docs mark it
+	// optional ("file_name: This field is required").
 	fake.clear()
-	if _, err := ValidateSFTPFile(BulkFileJobOptions{HasHeaderRow: true}); err != nil {
+	if _, err := ValidateSFTPFile(BulkFileJobOptions{FileName: "my_file.txt", HasHeaderRow: true, ReturnURL: "https://example.com/done"}); err != nil {
 		t.Fatal(err)
 	}
 	request = onlyRequest(t, fake)
 	if request.Path != "/validateSFTPfile" {
 		t.Fatalf("path = %s", request.Path)
 	}
-	if _, found := request.Fields["file_name"]; found {
-		t.Fatalf("file_name should not be sent: %+v", request.Fields)
-	}
-	if request.Fields["has_header_row"] != "true" {
+	if request.Fields["file_name"] != "my_file.txt" || request.Fields["has_header_row"] != "true" {
 		t.Fatalf("%+v", request.Fields)
 	}
+	// A job without file_name or return_url never reaches the API.
+	if _, err := ValidateSFTPFile(BulkFileJobOptions{HasHeaderRow: true, ReturnURL: "https://example.com/done"}); err == nil {
+		t.Fatal("missing file_name should be rejected")
+	}
+	if _, err := ValidateSFTPFile(BulkFileJobOptions{FileName: "f.csv", HasHeaderRow: true}); err == nil {
+		t.Fatal("missing return_url should be rejected")
+	}
 
-	named := BulkFileJobOptions{FileName: "my_file.txt", HasHeaderRow: true}
+	named := BulkFileJobOptions{FileName: "my_file.txt", HasHeaderRow: true, ReturnURL: "https://example.com/done"}
 	for path, call := range map[string]func(BulkFileJobOptions) (*FileValidationResponse, error){
 		"/validateSFTPfile":     ValidateSFTPFile,
 		"/scoreSFTPfile":        ScoreSFTPFile,
@@ -194,7 +200,7 @@ func TestOfflineS3AndSftpFileJobsSendTheDocumentedFieldsOnly(t *testing.T) {
 func TestOfflineBulkJobsRejectInvalidArgumentsBeforeRequest(t *testing.T) {
 	fake := useFake(t)
 	Initialize("bulk-key")
-	blank := BulkFileJobOptions{FileName: "   ", HasHeaderRow: true}
+	blank := BulkFileJobOptions{FileName: "   ", HasHeaderRow: true, ReturnURL: "https://example.com/done"}
 
 	for _, call := range []func(BulkFileJobOptions) (*FileValidationResponse, error){
 		EmailFinderS3File, DomainSearchS3File,
@@ -248,9 +254,9 @@ func TestOfflineInboxPlacementUsesItsOwnHostAndCamelCaseJSON(t *testing.T) {
 	if request.Path != "/api/ipt/providers" {
 		t.Fatalf("path = %s", request.Path)
 	}
-	// The API key goes on the query string here, not in the body.
-	if request.APIKey != "ipt-key" {
-		t.Fatalf("api_key = %s", request.APIKey)
+	// The documented auth for this API is a Bearer header, not a query key.
+	if request.Authorization != "Bearer ipt-key" {
+		t.Fatalf("authorization = %s", request.Authorization)
 	}
 
 	fake.clear()
@@ -298,7 +304,7 @@ func TestOfflineInboxPlacementUsesItsOwnHostAndCamelCaseJSON(t *testing.T) {
 	request = onlyRequest(t, fake)
 	if request.Fields["status"] != "finished" ||
 		request.Fields["page"] != "1" ||
-		request.Fields["pageSize"] != "25" {
+		request.Fields["page_size"] != "25" {
 		t.Fatalf("%+v", request.Fields)
 	}
 
@@ -307,7 +313,7 @@ func TestOfflineInboxPlacementUsesItsOwnHostAndCamelCaseJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	request = onlyRequest(t, fake)
-	for _, absent := range []string{"status", "page", "pageSize"} {
+	for _, absent := range []string{"status", "page", "page_size"} {
 		if _, found := request.Fields[absent]; found {
 			t.Fatalf("%s should not be sent: %+v", absent, request.Fields)
 		}

@@ -364,20 +364,17 @@ func TestBulkValidateStatus200NotSuccess(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	mockOkResponse(
-		"GET",
-		ENDPOINT_FILE_STATUS,
-		sample_file_validation_status_200_invalid,
-	)
-
+	// {"success": false} on an HTTP 200 is a failure, not a result.
+	mockOkResponse("GET", ENDPOINT_FILE_STATUS, sample_file_validation_status_200_invalid)
 	response_object, error_ := BulkValidationFileStatus(testing_file_id)
-	if !assert.Nil(t, error_) {
+	assert.Nil(t, response_object)
+	if !assert.NotNil(t, error_) {
 		t.FailNow()
 	}
-	if !assert.NotNil(t, response_object) {
-		t.FailNow()
+	var apiErr *ZBApiError
+	if assert.ErrorAs(t, error_, &apiErr) {
+		assert.Equal(t, 200, apiErr.StatusCode)
 	}
-	assert.Equal(t, false, response_object.Success)
 }
 
 // TestBulkValidateStatus200Success - process expected to go accordingly
@@ -455,7 +452,9 @@ func TestBulkValidateDelete400Error(t *testing.T) {
 
 }
 
-// TestBulkValidateDelete200NotSuccess - error encountered but not a bad request (invalid)
+// TestBulkValidateDelete200NotSuccess - {"success": false} on an HTTP 200 is a
+// failure, not a result. The live API answers an unknown file id exactly that
+// way, with a 200, so returning it as a successful response hid the error.
 func TestBulkValidateDelete200NotSuccess(t *testing.T) {
 	Initialize("mock_key")
 	httpmock.Activate()
@@ -463,11 +462,15 @@ func TestBulkValidateDelete200NotSuccess(t *testing.T) {
 
 	mockOkResponse("GET", ENDPOINT_FILE_DELETE, sample_validation_delete_200_not_success)
 	response_object, error_ := BulkValidationFileDelete(testing_file_id)
-	assert.Nil(t, error_)
-	if !assert.NotNil(t, response_object) {
+	assert.Nil(t, response_object)
+	if !assert.NotNil(t, error_) {
 		t.FailNow()
 	}
-	assert.Equal(t, false, response_object.Success)
+	// The HTTP status travels with the error.
+	var apiErr *ZBApiError
+	if assert.ErrorAs(t, error_, &apiErr) {
+		assert.Equal(t, 200, apiErr.StatusCode)
+	}
 }
 
 // TestBulkValidateDelete200Success - process expected to go accordingly

@@ -85,6 +85,33 @@ func postBulkRootMultipart(requestURL string, file io.Reader, fileName string, f
 	return responseObject, nil
 }
 
+// postBulkRootFormAt posts a form to a fully built URL, for the endpoints that
+// do not sit on the bulkapi root (send-evaluated-file is on the /v2 base).
+func postBulkRootFormAt(requestURL string, fields url.Values) (*FileValidationResponse, error) {
+	if err := packageConfig().requireKey(); err != nil {
+		return nil, err
+	}
+	if fields == nil {
+		fields = url.Values{}
+	}
+	fields.Set("api_key", API_KEY)
+
+	responseHTTP, err := timedHTTPClient().PostForm(requestURL, fields)
+	if err != nil {
+		return nil, err
+	}
+	defer responseHTTP.Body.Close()
+	body, err := io.ReadAll(responseHTTP.Body)
+	if err != nil {
+		return nil, err
+	}
+	responseObject := &FileValidationResponse{}
+	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, responseObject); err != nil {
+		return nil, err
+	}
+	return responseObject, nil
+}
+
 func postBulkRootForm(path string, fields url.Values) (*FileValidationResponse, error) {
 	if err := packageConfig().requireKey(); err != nil {
 		return nil, err

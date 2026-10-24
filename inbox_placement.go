@@ -33,13 +33,14 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 	if query == nil {
 		query = url.Values{}
 	}
-	query.Set("api_key", API_KEY)
 
 	url_to_request, error_ := url.JoinPath(INBOX_PLACEMENT_URI, path)
 	if error_ != nil {
 		return error_
 	}
-	url_to_request = fmt.Sprintf("%s?%s", url_to_request, query.Encode())
+	if encoded := query.Encode(); encoded != "" {
+		url_to_request = fmt.Sprintf("%s?%s", url_to_request, encoded)
+	}
 
 	var request *http.Request
 	if body == nil {
@@ -58,6 +59,8 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 		return error_
 	}
 	request.Header.Set("Accept", CONTENT_TYPE_JSON)
+	// The documented auth for this API is a Bearer header, not an api_key query.
+	request.Header.Set("Authorization", "Bearer "+API_KEY)
 
 	response_http, error_ := timedHTTPClient().Do(request)
 	if error_ != nil {
@@ -149,9 +152,12 @@ func GetInboxPlacementTest(test_id string) (map[string]interface{}, error) {
 
 // ListInboxPlacementTestsOptions - the documented filters of the test list.
 type ListInboxPlacementTestsOptions struct {
-	Status   string
-	Page     *int
-	PageSize *int
+	Status string
+	// CreatedAfter and CreatedBefore are ISO 8601 timestamps.
+	CreatedAfter  string
+	CreatedBefore string
+	Page          *int
+	PageSize      *int
 }
 
 // ListInboxPlacementTests - the account's tests (GET /api/ipt/test).
@@ -161,15 +167,23 @@ func ListInboxPlacementTests(options *ListInboxPlacementTestsOptions) (map[strin
 		if options.Status != "" {
 			query.Set("status", options.Status)
 		}
+		if options.CreatedAfter != "" {
+			query.Set("createdAfter", options.CreatedAfter)
+		}
+		if options.CreatedBefore != "" {
+			query.Set("createdBefore", options.CreatedBefore)
+		}
 		if options.Page != nil {
 			query.Set("page", fmt.Sprintf("%d", *options.Page))
 		}
 		if options.PageSize != nil {
-			query.Set("pageSize", fmt.Sprintf("%d", *options.PageSize))
+			query.Set("page_size", fmt.Sprintf("%d", *options.PageSize))
 		}
 	}
 	payload := map[string]interface{}{}
-	return payload, iptRequest("GET", "/test", query, nil, &payload)
+	// The list is GET /tests, plural. GET /test answers
+	// {"detail": "Method \"GET\" not allowed."}.
+	return payload, iptRequest("GET", "/tests", query, nil, &payload)
 }
 
 // DeleteInboxPlacementTest - delete one test (DELETE /api/ipt/test/{id}).
