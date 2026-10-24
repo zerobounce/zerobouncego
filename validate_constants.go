@@ -49,4 +49,5 @@ const (
 	ValidateSubStatusAcceptAll               = "accept_all"
 	ValidateSubStatusRoleBasedAcceptAll      = "role_based_accept_all"
 	ValidateSubStatusGold                    = "gold"
+	ValidateSubStatusAiAgentMailbox          = "ai_agent_mailbox"
 )

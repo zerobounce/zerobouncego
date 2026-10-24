@@ -391,6 +391,89 @@ Example export file:
 
 ```
 
+## S3 and SFTP/FTP bulk
+
+Queue a job on a file that already sits in your Amazon S3 bucket, or on your
+SFTP/FTP server. See the [S3](https://www.zerobounce.net/docs/api-integrations/amazon-s3-bulk-api)
+and [SFTP](https://www.zerobounce.net/docs/api-integrations/sftp_bulk_api) docs.
+These live on the bulkapi host *without* the `/v2` path.
+
+```go
+// Amazon S3. FileName is the full path, as returned by ListS3Files.
+zerobouncego.EmailFinderS3File(zerobouncego.BulkFileJobOptions{
+    FileName: "lists/leads.csv", HasHeaderRow: true,
+})
+
+removeDuplicates := true
+zerobouncego.DomainSearchS3File(zerobouncego.BulkFileJobOptions{
+    FileName:         "lists/leads.csv",
+    HasHeaderRow:     true,
+    RemoveDuplicates: &removeDuplicates,
+    ReturnURL:        "https://example.com/zerobounce-done",
+})
+
+// SFTP/FTP. The server, path and protocol come from your ZeroBounce settings.
+// FileName may be left empty for ValidateSFTPFile alone, which then uses the
+// input bucket from those settings.
+zerobouncego.ValidateSFTPFile(zerobouncego.BulkFileJobOptions{HasHeaderRow: true})
+zerobouncego.ScoreSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt"})
+zerobouncego.EmailFinderSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt"})
+zerobouncego.DomainSearchSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt"})
+
+// Note the field: this one takes export_path, not export_bucket.
+// Pass "" to use the export path from your settings.
+zerobouncego.ExportSFTPFile("<FILE_ID>", "/exports")
+```
+
+## Validate options
+
+`ValidateWithOptions` also accepts `DomainInfo`, `GreylistProcessing` and
+`CallbackURL`. A nil pointer is not sent, and booleans go on the wire as the
+strings `"true"`/`"false"`.
+
+```go
+yes := true
+zerobouncego.ValidateWithOptions("possible_typo@example.com", zerobouncego.ValidateOptions{
+    DomainInfo:         &yes, // fills DomainWebsiteExists / DomainRegistrantCompanyName
+    GreylistProcessing: &yes,
+    CallbackURL:        "https://example.com/greylist", // needs GreylistProcessing
+})
+```
+
+`CallbackURL` is where the greylist retry posts its result, so it is rejected
+without `GreylistProcessing` — before any request is sent. While that retry is
+still running the API answers with a `Message` instead of a result, which lands
+on `response.Message`.
+
+## Inbox Placement Tester
+
+Runs on its own host (`INBOX_PLACEMENT_URI`), takes the API key on the query
+string, and sends camelCase JSON bodies. It spends the account's inbox-test
+credits.
+
+```go
+zerobouncego.GetInboxPlacementProviders()
+zerobouncego.GetInboxPlacementTestTypes()
+
+testType := 1
+created, _ := zerobouncego.CreateInboxPlacementTest("Launch", &zerobouncego.CreateInboxPlacementTestOptions{
+    TestType:    &testType,
+    SenderEmail: "news@example.com",
+    WebhookURL:  "https://example.com/ipt-webhook",
+})
+
+// Send your campaign to the seeds in `created`, then read the results.
+zerobouncego.GetInboxPlacementTest("<TEST_ID>")
+
+page := 1
+zerobouncego.ListInboxPlacementTests(&zerobouncego.ListInboxPlacementTestsOptions{
+    Status: "finished", Page: &page,
+})
+zerobouncego.SetInboxPlacementWebhook("https://example.com/ipt-webhook")
+zerobouncego.GetInboxPlacementWebhook()
+zerobouncego.DeleteInboxPlacementTest("<TEST_ID>")
+```
+
 ## Email Finder
 Email Finder allows you to search for new business email addresses using our proprietary technologies
 
