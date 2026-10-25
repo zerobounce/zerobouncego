@@ -32,14 +32,28 @@ zerobouncego.InitializeWithURI("mysecretapikey", ZB_API_URL_DEFAULT)
 If you need to use a mock service in your tests or otherwise use a different URI you can:
 Set it in the .env file (and calling LoadEnvFromFile):
 ```bash
-ZERO_BOUNCE_URI=        # optional, defaults to the production URI
-ZERO_BOUNCE_BULK_URI=   # optional, defaults to the production bulk URI
+ZERO_BOUNCE_URI=                    # optional, defaults to the production URI
+ZERO_BOUNCE_BULK_URI=               # optional, defaults to the production bulk URI
+ZERO_BOUNCE_LIST_EVALUATOR_URI=     # optional, defaults to the production list evaluator URI
+ZERO_BOUNCE_INBOX_PLACEMENT_URI=    # optional, defaults to the production inbox placement URI
 ```
 
 Call the setter function (passing empty strings will keep current values):
 ```go
-zerobouncego.SetURI(new_uri, new_bulk_uri)
+if err := zerobouncego.SetURI(new_uri, new_bulk_uri); err != nil {
+    // Both must be https:// URLs. Nothing is applied when either is rejected,
+    // so a typo cannot leave you quietly pointed at the old host.
+    log.Fatal(err)
+}
 ```
+
+A new bulk URI also moves the list evaluator and the Inbox Placement Tester,
+which live on the same host under different paths, onto the new one. Set
+`ZERO_BOUNCE_LIST_EVALUATOR_URI` or `ZERO_BOUNCE_INBOX_PLACEMENT_URI` to pin
+either of them somewhere else; `SetURI` then leaves that one alone.
+
+`Initialize` resets the main URI. It uses `ZERO_BOUNCE_URI` when that is set,
+and the production URI otherwise.
 
 ## Generic API methods
 
@@ -398,10 +412,31 @@ SFTP/FTP server. See the [S3](https://www.zerobounce.net/docs/api-integrations/a
 and [SFTP](https://www.zerobounce.net/docs/api-integrations/sftp_bulk_api) docs.
 These live on the bulkapi host *without* the `/v2` path.
 
+Every one of these jobs needs a `return_url`: the API posts the finished job
+there, and it answers `Provided return URL is not permitted: None` without one,
+so the SDK rejects the call before it goes out.
+
 ```go
 // Amazon S3. FileName is the full path, as returned by ListS3Files.
+zerobouncego.ListS3Files(zerobouncego.ListS3FilesOptions{Bucket: "my-bucket"})
+
+zerobouncego.ValidateS3File(zerobouncego.ValidateS3FileOptions{
+    FileName:  "lists/leads.csv",
+    ReturnURL: "https://example.com/zerobounce-done", // required
+})
+
+zerobouncego.ScoreS3File(zerobouncego.ScoreS3FileOptions{
+    FileName:  "lists/leads.csv",
+    ReturnURL: "https://example.com/zerobounce-done", // required
+})
+
+// export_bucket is optional: "" uses the bucket from your ZeroBounce settings.
+zerobouncego.ExportS3File("<FILE_ID>", "my-export-bucket")
+
 zerobouncego.EmailFinderS3File(zerobouncego.BulkFileJobOptions{
-    FileName: "lists/leads.csv", HasHeaderRow: true,
+    FileName:  "lists/leads.csv",
+    HasHeaderRow: true,
+    ReturnURL: "https://example.com/zerobounce-done",
 })
 
 removeDuplicates := true
@@ -413,12 +448,15 @@ zerobouncego.DomainSearchS3File(zerobouncego.BulkFileJobOptions{
 })
 
 // SFTP/FTP. The server, path and protocol come from your ZeroBounce settings.
-// FileName may be left empty for ValidateSFTPFile alone, which then uses the
-// input bucket from those settings.
-zerobouncego.ValidateSFTPFile(zerobouncego.BulkFileJobOptions{HasHeaderRow: true})
-zerobouncego.ScoreSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt"})
-zerobouncego.EmailFinderSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt"})
-zerobouncego.DomainSearchSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt"})
+// The docs call FileName optional for ValidateSFTPFile; the live API answers
+// "file_name: This field is required", so every job here needs it.
+done := "https://example.com/zerobounce-done"
+zerobouncego.ValidateSFTPFile(zerobouncego.BulkFileJobOptions{
+    FileName: "my_file.txt", HasHeaderRow: true, ReturnURL: done,
+})
+zerobouncego.ScoreSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt", ReturnURL: done})
+zerobouncego.EmailFinderSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt", ReturnURL: done})
+zerobouncego.DomainSearchSFTPFile(zerobouncego.BulkFileJobOptions{FileName: "my_file.txt", ReturnURL: done})
 
 // Note the field: this one takes export_path, not export_bucket.
 // Pass "" to use the export path from your settings.
@@ -447,9 +485,14 @@ on `response.Message`.
 
 ## Inbox Placement Tester
 
-Runs on its own host (`INBOX_PLACEMENT_URI`), takes the API key on the query
-string, and sends camelCase JSON bodies. It spends the account's inbox-test
-credits.
+Runs on its own host (`INBOX_PLACEMENT_URI`), takes the API key in an
+`Authorization: Bearer` header rather than on the query string, and sends
+camelCase JSON bodies. It spends the account's inbox-test credits.
+
+A test name is at most 64 characters, `TestType` is 1, 2 or 3, and type 1 needs
+a `SenderEmail`. On the list, `Status` is `"running"` or `"finished"` and
+`PageSize` is 1-100. Each of those is checked before the request goes out, so a
+rejected call costs nothing.
 
 ```go
 zerobouncego.GetInboxPlacementProviders()
@@ -465,9 +508,9 @@ created, _ := zerobouncego.CreateInboxPlacementTest("Launch", &zerobouncego.Crea
 // Send your campaign to the seeds in `created`, then read the results.
 zerobouncego.GetInboxPlacementTest("<TEST_ID>")
 
-page := 1
+page, pageSize := 1, 50
 zerobouncego.ListInboxPlacementTests(&zerobouncego.ListInboxPlacementTestsOptions{
-    Status: "finished", Page: &page,
+    Status: zerobouncego.IPT_STATUS_FINISHED, Page: &page, PageSize: &pageSize,
 })
 zerobouncego.SetInboxPlacementWebhook("https://example.com/ipt-webhook")
 zerobouncego.GetInboxPlacementWebhook()

@@ -1,9 +1,13 @@
 package zerobouncego
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/jarcoal/httpmock"
+	"github.com/stretchr/testify/assert"
 )
 
 // Offline tests for the endpoints ported from the Python SDK (407f0a8 and
@@ -359,4 +363,160 @@ func TestOfflineInboxPlacementUsesItsOwnHostAndCamelCaseJSON(t *testing.T) {
 	if fake.size() != 0 {
 		t.Fatalf("requests = %d, want 0", fake.size())
 	}
+}
+
+// The Inbox Placement Tester rejects a name over 64 characters, a testType
+// outside 1|2|3, a type-1 test without a sender, a status outside
+// running|finished, and a page_size outside 1-100. The SDK checks all five
+// before a request goes out, so none of them spends an inbox-test credit.
+func TestInboxPlacementArgumentChecks(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder(
+		"POST",
+		"https://bulkapi.zerobounce.net/api/ipt/test",
+		httpmock.NewStringResponder(200, `{"id":"should-not-be-reached"}`),
+	)
+	httpmock.RegisterResponder(
+		"GET",
+		`=~^https://bulkapi\.zerobounce\.net/api/ipt/tests`,
+		httpmock.NewStringResponder(200, `{"results":[]}`),
+	)
+
+	badType := 4
+	typeOne := 1
+	tooSmall, tooBig := 0, 101
+
+	_, err := CreateInboxPlacementTest(strings.Repeat("n", 65), nil)
+	assert.ErrorContains(t, err, "64")
+
+	_, err = CreateInboxPlacementTest("Launch", &CreateInboxPlacementTestOptions{TestType: &badType})
+	assert.ErrorContains(t, err, "testType")
+
+	_, err = CreateInboxPlacementTest("Launch", &CreateInboxPlacementTestOptions{TestType: &typeOne})
+	assert.ErrorContains(t, err, "senderEmail")
+
+	_, err = ListInboxPlacementTests(&ListInboxPlacementTestsOptions{Status: "done"})
+	assert.ErrorContains(t, err, "status")
+
+	_, err = ListInboxPlacementTests(&ListInboxPlacementTestsOptions{PageSize: &tooSmall})
+	assert.ErrorContains(t, err, "page_size")
+
+	_, err = ListInboxPlacementTests(&ListInboxPlacementTestsOptions{PageSize: &tooBig})
+	assert.ErrorContains(t, err, "page_size")
+
+	assert.Equal(t, 0, httpmock.GetTotalCallCount())
+
+	// A name of exactly 64 characters is allowed, and so is each test type.
+	_, err = CreateInboxPlacementTest(strings.Repeat("n", 64), nil)
+	assert.NoError(t, err)
+	for _, testType := range []int{1, 2, 3} {
+		value := testType
+		_, err = CreateInboxPlacementTest("Launch", &CreateInboxPlacementTestOptions{
+			TestType:    &value,
+			SenderEmail: "news@example.com",
+		})
+		assert.NoError(t, err)
+	}
+	assert.Equal(t, 4, httpmock.GetTotalCallCount())
+}
+
+// CreateInboxPlacementTest: method, full URL, camelCase JSON body, the Bearer
+// header the API wants, and the parsed response.
+func TestCreateInboxPlacementTestRequest(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder(
+		"POST",
+		"https://bulkapi.zerobounce.net/api/ipt/test",
+		func(req *http.Request) (*http.Response, error) {
+			// The key is a Bearer header here, never on the query string.
+			assert.Equal(t, "Bearer mock_key", req.Header.Get("Authorization"))
+			assert.Empty(t, req.URL.Query().Get("api_key"))
+
+			body := map[string]interface{}{}
+			assert.NoError(t, json.NewDecoder(req.Body).Decode(&body))
+			assert.Equal(t, "Launch", body["name"])
+			assert.Equal(t, float64(1), body["testType"])
+			assert.Equal(t, "news@example.com", body["senderEmail"])
+			return httpmock.NewStringResponse(200, `{"id":"test-1","seeds":["seed@example.com"]}`), nil
+		},
+	)
+
+	testType := 1
+	created, err := CreateInboxPlacementTest("Launch", &CreateInboxPlacementTestOptions{
+		TestType:    &testType,
+		SenderEmail: "news@example.com",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "test-1", created["id"])
+}
+
+// A rejected create comes back as a short error carrying the API's "detail".
+func TestCreateInboxPlacementTestErrorBody(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder(
+		"POST",
+		"https://bulkapi.zerobounce.net/api/ipt/test",
+		httpmock.NewStringResponder(400, `{"detail":"Ensure this field has no more than 64 characters."}`),
+	)
+
+	_, err := CreateInboxPlacementTest("Launch", nil)
+	assert.ErrorContains(t, err, "64 characters")
+}
+
+// ListInboxPlacementTests: the plural /tests path, snake_case page_size, and
+// the documented filters on the query string.
+func TestListInboxPlacementTestsRequest(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder(
+		"GET",
+		`=~^https://bulkapi\.zerobounce\.net/api/ipt/tests`,
+		func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, "Bearer mock_key", req.Header.Get("Authorization"))
+			query := req.URL.Query()
+			assert.Equal(t, "running", query.Get("status"))
+			assert.Equal(t, "100", query.Get("page_size"))
+			assert.Equal(t, "2", query.Get("page"))
+			assert.Equal(t, "2024-01-01T00:00:00Z", query.Get("createdAfter"))
+			// pageSize is silently ignored by the API, so it is never sent.
+			assert.Empty(t, query.Get("pageSize"))
+			return httpmock.NewStringResponse(200, `{"count":1,"results":[{"id":"test-1"}]}`), nil
+		},
+	)
+
+	page, pageSize := 2, 100
+	listed, err := ListInboxPlacementTests(&ListInboxPlacementTestsOptions{
+		Status:       IPT_STATUS_RUNNING,
+		CreatedAfter: "2024-01-01T00:00:00Z",
+		Page:         &page,
+		PageSize:     &pageSize,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), listed["count"])
+}
+
+func TestListInboxPlacementTestsErrorBody(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder(
+		"GET",
+		`=~^https://bulkapi\.zerobounce\.net/api/ipt/tests`,
+		httpmock.NewStringResponder(401, `{"detail":"Invalid token."}`),
+	)
+
+	_, err := ListInboxPlacementTests(nil)
+	assert.ErrorContains(t, err, "Invalid token")
 }

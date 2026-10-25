@@ -1,5 +1,5 @@
-# ZeroBounce Go SDK – test image (Go 1.21)
-FROM golang:1.21-alpine
+# ZeroBounce Go SDK – test image (Go 1.27)
+FROM golang:1.27-alpine
 
 WORKDIR /app
 
