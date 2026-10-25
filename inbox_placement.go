@@ -8,13 +8,15 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 // Inbox Placement Tester (https://bulkapi.zerobounce.net/api/ipt).
 //
-// Unlike the rest of the SDK these endpoints take the API key on the query
-// string, send and receive camelCase JSON, and report errors under a "detail"
-// key (Django REST framework). They spend the account's inbox-test credits.
+// Unlike the rest of the SDK these endpoints take the API key in an
+// "Authorization: Bearer" header and never on the query string, send and
+// receive camelCase JSON, and report errors under a "detail" key (Django REST
+// framework). They spend the account's inbox-test credits.
 
 // iptTestPath URL-encodes a test id as a single path segment.
 func iptTestPath(test_id string) (string, error) {
@@ -109,11 +111,31 @@ type CreateInboxPlacementTestOptions struct {
 	WebhookURL  string
 }
 
+// iptTestNameMaxLength is the documented limit on a test name.
+const iptTestNameMaxLength = 64
+
 // CreateInboxPlacementTest - start a test and get back its seed list
-// (POST /api/ipt/test). Name is required.
+// (POST /api/ipt/test).
+//
+// Name is required and is at most 64 characters. TestType, when set, is 1, 2
+// or 3, and type 1 needs a SenderEmail. These are checked here so no request
+// goes out that the API would reject.
 func CreateInboxPlacementTest(name string, options *CreateInboxPlacementTestOptions) (map[string]interface{}, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("empty parameter: name")
+	}
+	if utf8.RuneCountInString(name) > iptTestNameMaxLength {
+		return nil, fmt.Errorf("invalid parameter: name must be at most %d characters", iptTestNameMaxLength)
+	}
+	if options != nil && options.TestType != nil {
+		switch *options.TestType {
+		case 1, 2, 3:
+		default:
+			return nil, fmt.Errorf("invalid parameter: testType must be 1, 2 or 3")
+		}
+		if *options.TestType == 1 && strings.TrimSpace(options.SenderEmail) == "" {
+			return nil, fmt.Errorf("empty parameter: senderEmail is required when testType is 1")
+		}
 	}
 	body := map[string]interface{}{"name": name}
 	if options != nil {
@@ -157,14 +179,35 @@ type ListInboxPlacementTestsOptions struct {
 	CreatedAfter  string
 	CreatedBefore string
 	Page          *int
-	PageSize      *int
+	// PageSize is the documented page_size, between 1 and 100. The API
+	// silently ignores a camelCase pageSize.
+	PageSize *int
 }
 
-// ListInboxPlacementTests - the account's tests (GET /api/ipt/test).
+// Inbox placement test statuses accepted by the list filter.
+const (
+	IPT_STATUS_RUNNING  = "running"
+	IPT_STATUS_FINISHED = "finished"
+)
+
+// The documented bounds of the list's page_size. The API ignores a camelCase
+// pageSize, so the SDK sends page_size.
+const (
+	iptPageSizeMin = 1
+	iptPageSizeMax = 100
+)
+
+// ListInboxPlacementTests - the account's tests (GET /api/ipt/tests).
+//
+// Status, when set, is "running" or "finished", and PageSize is 1-100. Both
+// are checked here so no request goes out that the API would reject.
 func ListInboxPlacementTests(options *ListInboxPlacementTestsOptions) (map[string]interface{}, error) {
 	query := url.Values{}
 	if options != nil {
 		if options.Status != "" {
+			if options.Status != IPT_STATUS_RUNNING && options.Status != IPT_STATUS_FINISHED {
+				return nil, fmt.Errorf("invalid parameter: status must be %q or %q", IPT_STATUS_RUNNING, IPT_STATUS_FINISHED)
+			}
 			query.Set("status", options.Status)
 		}
 		if options.CreatedAfter != "" {
@@ -177,6 +220,9 @@ func ListInboxPlacementTests(options *ListInboxPlacementTestsOptions) (map[strin
 			query.Set("page", fmt.Sprintf("%d", *options.Page))
 		}
 		if options.PageSize != nil {
+			if *options.PageSize < iptPageSizeMin || *options.PageSize > iptPageSizeMax {
+				return nil, fmt.Errorf("invalid parameter: page_size must be between %d and %d", iptPageSizeMin, iptPageSizeMax)
+			}
 			query.Set("page_size", fmt.Sprintf("%d", *options.PageSize))
 		}
 	}

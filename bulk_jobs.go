@@ -27,27 +27,40 @@ type BulkFileJobOptions struct {
 	ReturnURL        string
 }
 
-// bulkRootFileJob - build and POST one of the six documented file jobs.
-// Booleans go on the wire as the strings "true"/"false".
-func bulkRootFileJob(path string, opts BulkFileJobOptions, fileNameRequired bool) (*FileValidationResponse, error) {
-	// LIVE: file_name and return_url are required by every job, including
-	// validateSFTPfile, although the docs mark them optional. Without them the
-	// API answers "file_name: This field is required" and
-	// "Provided return URL is not permitted: None". Both are checked here so no
-	// request goes out that the API would reject.
-	_ = fileNameRequired
-	if strings.TrimSpace(opts.FileName) == "" {
+// bulkRootJobFields - validate and build the four fields every S3 / SFTP file
+// job shares. Booleans go on the wire as the strings "true"/"false"; a nil
+// pointer is left out.
+//
+// LIVE: file_name and return_url are required by every job, including
+// validateSFTPfile and validateS3file, although the docs mark them optional.
+// Without them the API answers "file_name: This field is required" and
+// "Provided return URL is not permitted: None". Both are checked here so no
+// request goes out that the API would reject.
+//
+// Only remove_duplicates is documented; the SDK used to send a stray
+// remove_duplicate alongside it on the S3 validate and score jobs.
+func bulkRootJobFields(fileName string, hasHeaderRow, removeDuplicates *bool, returnURL string) (url.Values, error) {
+	if strings.TrimSpace(fileName) == "" {
 		return nil, fmt.Errorf("empty parameter: file_name")
 	}
-	if strings.TrimSpace(opts.ReturnURL) == "" {
+	if strings.TrimSpace(returnURL) == "" {
 		return nil, fmt.Errorf("empty parameter: return_url (the API rejects a job without it)")
 	}
 	fields := url.Values{}
-	fields.Set("file_name", opts.FileName)
-	fields.Set("has_header_row", fmt.Sprintf("%t", opts.HasHeaderRow))
-	fields.Set("return_url", opts.ReturnURL)
-	if opts.RemoveDuplicates != nil {
-		fields.Set("remove_duplicates", fmt.Sprintf("%t", *opts.RemoveDuplicates))
+	fields.Set("file_name", fileName)
+	appendOptionalBoolField(fields, "has_header_row", hasHeaderRow)
+	appendOptionalBoolField(fields, "remove_duplicates", removeDuplicates)
+	fields.Set("return_url", returnURL)
+	return fields, nil
+}
+
+// bulkRootFileJob - build and POST one of the six documented file jobs.
+func bulkRootFileJob(path string, opts BulkFileJobOptions, fileNameRequired bool) (*FileValidationResponse, error) {
+	_ = fileNameRequired
+	// HasHeaderRow is a plain bool here, so it is always sent.
+	fields, err := bulkRootJobFields(opts.FileName, &opts.HasHeaderRow, opts.RemoveDuplicates, opts.ReturnURL)
+	if err != nil {
+		return nil, err
 	}
 	return postBulkRootForm(path, fields)
 }

@@ -118,8 +118,10 @@ var (
 	URI      = Getenv(`ZERO_BOUNCE_URI`, `https://api.zerobounce.net/v2/`)
 	BULK_URI = Getenv(`ZERO_BOUNCE_BULK_URI`, `https://bulkapi.zerobounce.net/v2/`)
 	// LIST_EVALUATOR_URI and INBOX_PLACEMENT_URI are separate hosts, not paths
-	// built from BULK_URI. SetURI does not touch them, so a test that only
-	// overrides URI and BULK_URI would still reach the live API.
+	// built from BULK_URI. SetURI rebases them onto the bulk host it is given,
+	// so a test that overrides URI and BULK_URI no longer reaches the live API
+	// here. Set them through the environment to point them somewhere else;
+	// SetURI then leaves them alone.
 	LIST_EVALUATOR_URI  = Getenv(`ZERO_BOUNCE_LIST_EVALUATOR_URI`, `https://bulkapi.zerobounce.net/v2/listevaluator`)
 	INBOX_PLACEMENT_URI = Getenv(`ZERO_BOUNCE_INBOX_PLACEMENT_URI`, `https://bulkapi.zerobounce.net/api/ipt`)
 
@@ -135,10 +137,15 @@ var (
 
 // FUNCTIONS
 
-// Initialize the API key explicitly
+// Initialize the API key explicitly.
+//
+// It also resets URI to the default. ZERO_BOUNCE_URI is that default when it
+// is set: Initialize used to overwrite URI with the hardcoded production host,
+// which silently discarded an environment override and sent later calls to
+// production.
 func Initialize(new_api_key_value string) {
 	API_KEY = new_api_key_value
-	URI = zbApiURLValue[ZB_API_URL_DEFAULT]
+	URI = Getenv(`ZERO_BOUNCE_URI`, zbApiURLValue[ZB_API_URL_DEFAULT])
 }
 
 // Initialize the API key and the URI explicitly
@@ -168,18 +175,44 @@ func requireHTTPS(raw string) (string, error) {
 	return raw, nil
 }
 
-// Update URI, BULK_URI or both (will not be updated if empty strings are passed)
-func SetURI(new_uri string, new_bulk_uri string) {
-	if new_uri != "" {
-		if validated, err := requireHTTPS(new_uri); err == nil {
-			URI = validated
+// SetURI updates URI, BULK_URI or both. An empty string keeps the current
+// value.
+//
+// Both must be https:// URLs. A malformed or non-https value is returned as an
+// error and leaves every base URL untouched. The error used to be swallowed,
+// so a caller who redirected to a test host and mistyped it kept hitting the
+// old host without being told.
+//
+// A new bulk URI also rebases LIST_EVALUATOR_URI and INBOX_PLACEMENT_URI onto
+// that host. They are separate base URLs rather than paths built from
+// BULK_URI, so the list evaluator and the Inbox Placement Tester used to keep
+// reaching production after a redirect. A value set through
+// ZERO_BOUNCE_LIST_EVALUATOR_URI or ZERO_BOUNCE_INBOX_PLACEMENT_URI is an
+// explicit choice of host and is left alone.
+func SetURI(new_uri string, new_bulk_uri string) error {
+	validatedURI, err := requireHTTPS(new_uri)
+	if err != nil {
+		return fmt.Errorf("invalid URI: %w", err)
+	}
+	validatedBulkURI, err := requireHTTPS(new_bulk_uri)
+	if err != nil {
+		return fmt.Errorf("invalid bulk URI: %w", err)
+	}
+
+	if validatedURI != "" {
+		URI = validatedURI
+	}
+	if validatedBulkURI != "" {
+		BULK_URI = validatedBulkURI
+		root := bulkAPIRoot()
+		if os.Getenv(`ZERO_BOUNCE_LIST_EVALUATOR_URI`) == "" {
+			LIST_EVALUATOR_URI = root + "/v2/listevaluator"
+		}
+		if os.Getenv(`ZERO_BOUNCE_INBOX_PLACEMENT_URI`) == "" {
+			INBOX_PLACEMENT_URI = root + "/api/ipt"
 		}
 	}
-	if new_bulk_uri != "" {
-		if validated, err := requireHTTPS(new_bulk_uri); err == nil {
-			BULK_URI = validated
-		}
-	}
+	return nil
 }
 
 // LoadEnvFromFile provided that a .env file can be found where the
@@ -192,7 +225,11 @@ func LoadEnvFromFile() bool {
 		return false
 	}
 	Initialize(getAPIKeyFromEnv())
-	SetURI(os.Getenv("ZERO_BOUNCE_URI"), os.Getenv("ZERO_BOUNCE_BULK_URI"))
+	if err := SetURI(os.Getenv("ZERO_BOUNCE_URI"), os.Getenv("ZERO_BOUNCE_BULK_URI")); err != nil {
+		// The key is set either way; say so rather than leaving the caller to
+		// wonder why its base URL override did not take.
+		fmt.Printf("The '.env' base URL was not applied (%s). Continuing with the current one\n", err.Error())
+	}
 	return true
 }
 

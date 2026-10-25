@@ -12,16 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ValidateWithOptions` takes `Timeout`, `ActivityData`, `VerifyPlus`, and `UsePost` (form-encoded `POST /validate`). `ValidateResponse` reads `active_in_days` and `active_first_seen`.
 - `ValidateBatchWithOptions` sends `timeout`, `activity_data`, and `verify_plus` when they are set.
 - `ScoreEmail` (`GET /scoring`) and `ScoreEmailPost` (form-encoded `POST /scoring`).
-- Bulk email finder (`BulkEmailFinderSubmit`, `BulkEmailFinderFileStatus`, `BulkEmailFinderResult`, `BulkEmailFinderFileDelete`).
+- Bulk email finder (`BulkEmailFinderSubmit`, `BulkEmailFinderFileStatus`, `BulkEmailFinderResult`, `BulkEmailFinderFileDelete`). `BulkEmailFinderSubmit` needs `DomainColumn` and one of `FirstNameColumn` or `FullNameColumn`, and says which is missing before uploading the file.
 - Bulk domain search (`BulkDomainSearchSubmit`, `BulkDomainSearchFileStatus`, `BulkDomainSearchResult`, `BulkDomainSearchFileDelete`).
 - List evaluator (`ListEvaluatorSubmit`, `GetListEvaluatorResult`, `SendEvaluatedFile`).
 - Filters (`AddFilter`, `ListFilters`, `DeleteFilter`).
-- S3 bulk (`ValidateS3File`, `ScoreS3File`, `ExportS3File`, `ListS3Files`, `EmailFinderS3File`, `DomainSearchS3File`).
+- S3 bulk (`ValidateS3File`, `ScoreS3File`, `ExportS3File`, `ListS3Files`, `EmailFinderS3File`, `DomainSearchS3File`). `ValidateS3FileOptions` and `ScoreS3FileOptions` take a `ReturnURL`, which every S3 and SFTP job requires: the API rejects one without it (`Provided return URL is not permitted: None`), so the SDK does too. Only the documented `remove_duplicates` goes on the wire; `RemoveDuplicate` is deprecated and is used only when `RemoveDuplicates` is nil. `ExportS3File`'s export bucket is optional and falls back to the bucket in your ZeroBounce settings, like `ExportSFTPFile`'s export path.
 - SFTP/FTP bulk (`ValidateSFTPFile`, `ScoreSFTPFile`, `EmailFinderSFTPFile`, `DomainSearchSFTPFile`, `ExportSFTPFile`), sharing the new `BulkFileJobOptions`. The server, path and protocol come from your ZeroBounce settings. `ValidateSFTPFile`'s `FileName` is optional; `ExportSFTPFile` takes `export_path` rather than the `export_bucket` `ExportS3File` sends.
 - `ValidateOptions` accepts `DomainInfo`, `GreylistProcessing` and `CallbackURL`. `CallbackURL` needs `GreylistProcessing` set to true and is rejected without it, and when blank, before a request is sent.
 - `ValidateResponse` carries `DomainWebsiteExists`, `DomainRegistrantCompanyName` and `Message`. `Message` is the API's `Message` key, returned instead of a result while a greylist retry is still running.
-- Inbox Placement Tester on `INBOX_PLACEMENT_URI`: `GetInboxPlacementProviders`, `GetInboxPlacementTestTypes`, `CreateInboxPlacementTest`, `GetInboxPlacementTest`, `ListInboxPlacementTests`, `DeleteInboxPlacementTest`, `GetInboxPlacementWebhook`, `SetInboxPlacementWebhook`. The API key goes on the query string, bodies are camelCase JSON, and unset fields are left out.
-- `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI`. These are separate base URLs rather than paths built from `BULK_URI`, so `SetURI` does not touch them.
+- Inbox Placement Tester on `INBOX_PLACEMENT_URI`: `GetInboxPlacementProviders`, `GetInboxPlacementTestTypes`, `CreateInboxPlacementTest`, `GetInboxPlacementTest`, `ListInboxPlacementTests`, `DeleteInboxPlacementTest`, `GetInboxPlacementWebhook`, `SetInboxPlacementWebhook`. The API key goes in an `Authorization: Bearer` header, bodies are camelCase JSON, and unset fields are left out. A test name over 64 characters, a `TestType` outside 1|2|3, a type-1 test without a `SenderEmail`, a list `Status` other than `"running"` or `"finished"` (`IPT_STATUS_RUNNING`, `IPT_STATUS_FINISHED`), and a `PageSize` outside 1-100 are rejected before the request, so they cost no inbox-test credits.
+- `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI`. These are separate base URLs rather than paths built from `BULK_URI`. `SetURI` rebases both onto the bulk host it is given, so redirecting the SDK no longer leaves the list evaluator and the Inbox Placement Tester pointed at production. Set `ZERO_BOUNCE_LIST_EVALUATOR_URI` or `ZERO_BOUNCE_INBOX_PLACEMENT_URI` to pin either one; `SetURI` then leaves it alone.
 - `New` returns a `Client` that keeps its own API key. Package functions still use the process-wide key.
 
 ### Changed
@@ -29,9 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The list evaluator uses `LIST_EVALUATOR_URI` instead of building the path from `BULK_URI`, and the file id is URL-encoded as a single path segment.
 
 - API requests time out after 120 seconds and do not follow redirects.
-- `SetURI` leaves the current base URL in place when the new value is not `https://`.
+- `SetURI` returns an `error` instead of silently ignoring a malformed or non-`https://` value, and applies nothing when either argument is rejected. A call used as a statement still compiles; check the error to be told that an override was refused rather than keep reaching the old host.
 
 ### Fixed
+
+- `Initialize` no longer discards a `ZERO_BOUNCE_URI` override. It still resets the base URL, but to that environment value when it is set, instead of always to the production host.
 
 - The api-usage response now reads `sub_status_leading_period_removed` and `sub_status_alias_address`, two counters the API returns that were silently discarded.
 

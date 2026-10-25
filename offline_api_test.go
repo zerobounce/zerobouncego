@@ -618,10 +618,11 @@ func TestOfflinePriority3(t *testing.T) {
 	fake := useFake(t)
 	Initialize("p3-key")
 	_, err := BulkEmailFinderSubmit(EmailFinderCsvFile{
-		File:         strings.NewReader("example.com\n"),
-		FileName:     "finder.csv",
-		HasHeaderRow: false,
-		DomainColumn: 1,
+		File:           strings.NewReader("example.com\n"),
+		FileName:       "finder.csv",
+		HasHeaderRow:   false,
+		DomainColumn:   1,
+		FullNameColumn: 2,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -631,6 +632,9 @@ func TestOfflinePriority3(t *testing.T) {
 		t.Fatalf("%+v", request)
 	}
 	if request.Fields["domain_column"] != "1" || request.Fields["has_header_row"] != "false" {
+		t.Fatalf("%#v", request.Fields)
+	}
+	if request.Fields["full_name_column"] != "2" {
 		t.Fatalf("%#v", request.Fields)
 	}
 	if _, ok := request.Fields["first_name_column"]; ok {
@@ -776,6 +780,7 @@ func TestOfflinePriority3(t *testing.T) {
 		EmailAddressColumn: &column,
 		HasHeaderRow:       &header,
 		RemoveDuplicate:    &remove,
+		ReturnURL:          "https://example.com/done",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -787,22 +792,41 @@ func TestOfflinePriority3(t *testing.T) {
 	if request.Fields["file_name"] != "inbox.csv" || request.Fields["email_address_column"] != "0" {
 		t.Fatalf("%#v", request.Fields)
 	}
-	if request.Fields["has_header_row"] != "false" || request.Fields["remove_duplicate"] != "true" {
+	if request.Fields["has_header_row"] != "false" || request.Fields["return_url"] != "https://example.com/done" {
 		t.Fatalf("%#v", request.Fields)
+	}
+	// The deprecated RemoveDuplicate now feeds the one documented field, and
+	// the misspelled twin is no longer on the wire.
+	if request.Fields["remove_duplicates"] != "true" {
+		t.Fatalf("%#v", request.Fields)
+	}
+	if _, ok := request.Fields["remove_duplicate"]; ok {
+		t.Fatalf("stray remove_duplicate sent: %#v", request.Fields)
 	}
 	if _, ok := request.Fields["first_name_column"]; ok {
 		t.Fatal("unset first_name_column sent")
 	}
 	fake.clear()
-	if _, err = ScoreS3File(ScoreS3FileOptions{FileName: "inbox.csv"}); err != nil {
+	if _, err = ScoreS3File(ScoreS3FileOptions{
+		FileName:  "inbox.csv",
+		ReturnURL: "https://example.com/done",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	request = onlyRequest(t, fake)
 	if request.Path != "/scoreS3file" {
 		t.Fatal(request.Path)
 	}
+	if request.Fields["return_url"] != "https://example.com/done" {
+		t.Fatalf("%#v", request.Fields)
+	}
 	if _, ok := request.Fields["email_address_column"]; ok {
 		t.Fatal("unset email column sent")
+	}
+	for _, absent := range []string{"remove_duplicate", "remove_duplicates", "has_header_row"} {
+		if _, ok := request.Fields[absent]; ok {
+			t.Fatalf("unset %s sent: %#v", absent, request.Fields)
+		}
 	}
 	fake.clear()
 	if _, err = ExportS3File("fid", "bucket-out"); err != nil {
@@ -873,8 +897,23 @@ func TestOfflineRejectsInvalidArgumentsBeforeRequest(t *testing.T) {
 	if _, err := BulkEmailFinderSubmit(EmailFinderCsvFile{File: strings.NewReader("a\n"), FileName: "f.csv", DomainColumn: 0}); err == nil || !strings.Contains(err.Error(), "domain_column") {
 		t.Fatalf("domain column: %v", err)
 	}
+	// The finder needs a name to work from: one of the two name columns.
+	if _, err := BulkEmailFinderSubmit(EmailFinderCsvFile{File: strings.NewReader("a\n"), FileName: "f.csv", DomainColumn: 1}); err == nil ||
+		!strings.Contains(err.Error(), "first_name_column") || !strings.Contains(err.Error(), "full_name_column") {
+		t.Fatalf("name columns: %v", err)
+	}
 	if _, err := ValidateS3File(ValidateS3FileOptions{}); err == nil || !strings.Contains(err.Error(), "file_name") {
 		t.Fatalf("s3: %v", err)
+	}
+	// LIVE: both S3 jobs are rejected without return_url.
+	if _, err := ValidateS3File(ValidateS3FileOptions{FileName: "a.csv"}); err == nil || !strings.Contains(err.Error(), "return_url") {
+		t.Fatalf("s3 return_url: %v", err)
+	}
+	if _, err := ScoreS3File(ScoreS3FileOptions{}); err == nil || !strings.Contains(err.Error(), "file_name") {
+		t.Fatalf("score s3: %v", err)
+	}
+	if _, err := ScoreS3File(ScoreS3FileOptions{FileName: "a.csv"}); err == nil || !strings.Contains(err.Error(), "return_url") {
+		t.Fatalf("score s3 return_url: %v", err)
 	}
 	if fake.size() != 0 {
 		t.Fatalf("invalid args sent %d requests", fake.size())

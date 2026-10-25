@@ -48,9 +48,15 @@ type DomainSearchCsvFile struct {
 }
 
 // BulkEmailFinderSubmit uploads a CSV for bulk email finder.
+//
+// domain_column is required, and so is one of first_name_column or
+// full_name_column: the finder has no name to work from without one.
 func BulkEmailFinderSubmit(file EmailFinderCsvFile) (*FileValidationResponse, error) {
 	if file.DomainColumn == 0 {
 		return nil, fmt.Errorf("empty parameter: domain_column")
+	}
+	if file.FirstNameColumn == 0 && file.FullNameColumn == 0 {
+		return nil, fmt.Errorf("empty parameter: first_name_column or full_name_column (one of them is required)")
 	}
 	if file.File == nil {
 		return nil, fmt.Errorf("empty parameter: file")
@@ -188,11 +194,19 @@ func SendEvaluatedFile(fileID string) (*FileValidationResponse, error) {
 	return postBulkRootFormAt(requestURL, fields)
 }
 
-// ValidateS3FileOptions optional fields for validateS3file.
+// ValidateS3FileOptions fields for validateS3file.
+//
+// FileName and ReturnURL are required: the live API rejects a job without
+// either. The remaining fields are omitted until they are set.
 type ValidateS3FileOptions struct {
-	FileName           string
-	HasHeaderRow       *bool
-	RemoveDuplicates   *bool
+	FileName         string
+	HasHeaderRow     *bool
+	RemoveDuplicates *bool
+	// RemoveDuplicate is the misspelled twin of RemoveDuplicates. Only
+	// remove_duplicates is documented, and it is now the only one sent.
+	//
+	// Deprecated: set RemoveDuplicates instead. This field is used only when
+	// RemoveDuplicates is nil, and it will be removed in the next major version.
 	RemoveDuplicate    *bool
 	EmailAddressColumn *int
 	ReturnURL          string
@@ -203,21 +217,23 @@ type ValidateS3FileOptions struct {
 	AllowPhase2        *bool
 }
 
-// ValidateS3File submits an S3 object for bulk validation.
-func ValidateS3File(opts ValidateS3FileOptions) (*FileValidationResponse, error) {
-	if strings.TrimSpace(opts.FileName) == "" {
-		return nil, fmt.Errorf("empty parameter: file_name")
+// removeDuplicates folds the deprecated RemoveDuplicate into RemoveDuplicates.
+func (opts ValidateS3FileOptions) removeDuplicates() *bool {
+	if opts.RemoveDuplicates != nil {
+		return opts.RemoveDuplicates
 	}
-	fields := url.Values{}
-	fields.Set("file_name", opts.FileName)
-	appendOptionalBoolField(fields, "has_header_row", opts.HasHeaderRow)
-	appendOptionalBoolField(fields, "remove_duplicates", opts.RemoveDuplicates)
-	appendOptionalBoolField(fields, "remove_duplicate", opts.RemoveDuplicate)
+	return opts.RemoveDuplicate
+}
+
+// ValidateS3File submits an S3 object for bulk validation
+// (POST /validateS3file). FileName and ReturnURL are required.
+func ValidateS3File(opts ValidateS3FileOptions) (*FileValidationResponse, error) {
+	fields, err := bulkRootJobFields(opts.FileName, opts.HasHeaderRow, opts.removeDuplicates(), opts.ReturnURL)
+	if err != nil {
+		return nil, err
+	}
 	if opts.EmailAddressColumn != nil {
 		fields.Set("email_address_column", fmt.Sprintf("%d", *opts.EmailAddressColumn))
-	}
-	if opts.ReturnURL != "" {
-		fields.Set("return_url", opts.ReturnURL)
 	}
 	if v, ok := optionalIntField(opts.FirstNameColumn); ok {
 		fields.Set("first_name_column", v)
@@ -237,25 +253,39 @@ func ValidateS3File(opts ValidateS3FileOptions) (*FileValidationResponse, error)
 	return postBulkRootForm("/validateS3file", fields)
 }
 
-// ScoreS3FileOptions optional fields for scoreS3file.
+// ScoreS3FileOptions fields for scoreS3file.
+//
+// FileName and ReturnURL are required: the live API rejects a job without
+// either. The remaining fields are omitted until they are set.
 type ScoreS3FileOptions struct {
-	FileName           string
-	HasHeaderRow       *bool
-	RemoveDuplicates   *bool
+	FileName         string
+	HasHeaderRow     *bool
+	RemoveDuplicates *bool
+	// RemoveDuplicate is the misspelled twin of RemoveDuplicates. Only
+	// remove_duplicates is documented, and it is now the only one sent.
+	//
+	// Deprecated: set RemoveDuplicates instead. This field is used only when
+	// RemoveDuplicates is nil, and it will be removed in the next major version.
 	RemoveDuplicate    *bool
 	EmailAddressColumn *int
+	ReturnURL          string
 }
 
-// ScoreS3File submits an S3 object for AI scoring.
-func ScoreS3File(opts ScoreS3FileOptions) (*FileValidationResponse, error) {
-	if strings.TrimSpace(opts.FileName) == "" {
-		return nil, fmt.Errorf("empty parameter: file_name")
+// removeDuplicates folds the deprecated RemoveDuplicate into RemoveDuplicates.
+func (opts ScoreS3FileOptions) removeDuplicates() *bool {
+	if opts.RemoveDuplicates != nil {
+		return opts.RemoveDuplicates
 	}
-	fields := url.Values{}
-	fields.Set("file_name", opts.FileName)
-	appendOptionalBoolField(fields, "has_header_row", opts.HasHeaderRow)
-	appendOptionalBoolField(fields, "remove_duplicates", opts.RemoveDuplicates)
-	appendOptionalBoolField(fields, "remove_duplicate", opts.RemoveDuplicate)
+	return opts.RemoveDuplicate
+}
+
+// ScoreS3File submits an S3 object for AI scoring (POST /scoreS3file).
+// FileName and ReturnURL are required.
+func ScoreS3File(opts ScoreS3FileOptions) (*FileValidationResponse, error) {
+	fields, err := bulkRootJobFields(opts.FileName, opts.HasHeaderRow, opts.removeDuplicates(), opts.ReturnURL)
+	if err != nil {
+		return nil, err
+	}
 	if opts.EmailAddressColumn != nil {
 		fields.Set("email_address_column", fmt.Sprintf("%d", *opts.EmailAddressColumn))
 	}
@@ -293,7 +323,9 @@ func ListS3Files(opts ListS3FilesOptions) ([]S3ListFileEntry, error) {
 		return nil, err
 	}
 	fullURL := requestURL + "?" + params.Encode()
-	responseHTTP, err := timedHTTPClient().Get(fullURL)
+	// httpGet, not the bare client: a transport failure surfaces as a
+	// *url.Error carrying the full URL, and the api_key is in that query.
+	responseHTTP, err := httpGet(fullURL)
 	if err != nil {
 		return nil, err
 	}
@@ -309,17 +341,20 @@ func ListS3Files(opts ListS3FilesOptions) ([]S3ListFileEntry, error) {
 	return entries, nil
 }
 
-// ExportS3File exports a completed bulk job to an S3 bucket.
+// ExportS3File exports a completed bulk job to an S3 bucket
+// (POST /exportS3file).
+//
+// export_bucket is optional, like ExportSFTPFile's export_path: pass "" to use
+// the export bucket configured in your ZeroBounce settings.
 func ExportS3File(fileID, exportBucket string) (*FileValidationResponse, error) {
 	if strings.TrimSpace(fileID) == "" {
 		return nil, fmt.Errorf("empty parameter: file_id")
 	}
-	if strings.TrimSpace(exportBucket) == "" {
-		return nil, fmt.Errorf("empty parameter: export_bucket")
-	}
 	fields := url.Values{}
 	fields.Set("file_id", fileID)
-	fields.Set("export_bucket", exportBucket)
+	if strings.TrimSpace(exportBucket) != "" {
+		fields.Set("export_bucket", exportBucket)
+	}
 	return postBulkRootForm("/exportS3file", fields)
 }
 
