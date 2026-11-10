@@ -5,7 +5,7 @@
 // will not serve that version (404). See README § Publish.
 module github.com/zerobounce/zerobouncego/v2
 
-go 1.16
+go 1.21
 
 require (
 	github.com/jarcoal/httpmock v1.4.2
@@ -13,3 +13,5 @@ require (
 	github.com/stretchr/testify v1.12.1
 	gopkg.in/guregu/null.v4 v4.0.0
 )
+
+require go.yaml.in/yaml/v3 v3.0.5 // indirect

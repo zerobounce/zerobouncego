@@ -17,21 +17,18 @@ func EmailsToValidate() []EmailToValidate {
 
 // TestInvalidApiKey test expecting one error, relevant to invalid API key
 func TestInvalidApiKey(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
+	requireIntegration(t)
 	Initialize("some_invalid_value")
 	response, error_ := ValidateBatch(EmailsToValidate())
 
-	assert.Equal(t, error_.Error(), "error code: 1020")
+	if assert.Error(t, error_) {
+		assert.Equal(t, "error code: 1020", error_.Error())
+	}
 	assert.Len(t, response.EmailBatch, 0, "no email batch response was expected due to lack of valid API key")
 }
 
 func TestBulkEmailValidation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-	Initialize("mock_key")
+	requireIntegrationKey(t)
 	response, error_ := ValidateBatch(EmailsToValidate())
 	if error_ != nil {
 		fmt.Println(error_)

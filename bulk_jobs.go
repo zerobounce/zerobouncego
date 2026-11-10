@@ -16,10 +16,10 @@ import (
 
 // BulkFileJobOptions - the documented fields shared by the six S3 / SFTP file jobs.
 //
-// FileName is required by every job except ValidateSFTPFile, where the docs
-// list it as optional: leaving it empty there uses the input bucket configured
-// in your ZeroBounce settings. RemoveDuplicates and ReturnURL are omitted until
-// set.
+// FileName and ReturnURL are required by every job, ValidateSFTPFile included:
+// an empty one is rejected with "empty parameter: file_name" or "empty
+// parameter: return_url" before any request is sent. RemoveDuplicates is
+// omitted until set; HasHeaderRow is always sent.
 type BulkFileJobOptions struct {
 	FileName         string
 	HasHeaderRow     bool
@@ -55,8 +55,7 @@ func bulkRootJobFields(fileName string, hasHeaderRow, removeDuplicates *bool, re
 }
 
 // bulkRootFileJob - build and POST one of the six documented file jobs.
-func bulkRootFileJob(path string, opts BulkFileJobOptions, fileNameRequired bool) (*FileValidationResponse, error) {
-	_ = fileNameRequired
+func bulkRootFileJob(path string, opts BulkFileJobOptions) (*FileValidationResponse, error) {
 	// HasHeaderRow is a plain bool here, so it is always sent.
 	fields, err := bulkRootJobFields(opts.FileName, &opts.HasHeaderRow, opts.RemoveDuplicates, opts.ReturnURL)
 	if err != nil {
@@ -68,13 +67,13 @@ func bulkRootFileJob(path string, opts BulkFileJobOptions, fileNameRequired bool
 // EmailFinderS3File runs the email finder on a file in your Amazon S3 bucket
 // (POST /emailFinderS3file). FileName is the full path, as returned by ListS3Files.
 func EmailFinderS3File(opts BulkFileJobOptions) (*FileValidationResponse, error) {
-	return bulkRootFileJob("/emailFinderS3file", opts, true)
+	return bulkRootFileJob("/emailFinderS3file", opts)
 }
 
 // DomainSearchS3File runs domain search on a file in your Amazon S3 bucket
 // (POST /domainSearchS3file).
 func DomainSearchS3File(opts BulkFileJobOptions) (*FileValidationResponse, error) {
-	return bulkRootFileJob("/domainSearchS3file", opts, true)
+	return bulkRootFileJob("/domainSearchS3file", opts)
 }
 
 // SFTP / FTP bulk. The server, path and protocol are never sent by the SDK;
@@ -83,28 +82,29 @@ func DomainSearchS3File(opts BulkFileJobOptions) (*FileValidationResponse, error
 // ValidateSFTPFile validates a file from your SFTP/FTP server
 // (POST /validateSFTPfile).
 //
-// This is the one job whose file_name the docs list as optional: leave
-// opts.FileName empty to use the input bucket from your settings.
+// opts.FileName and opts.ReturnURL are required. The docs list file_name as
+// optional for this job, but the live API answers "file_name: This field is
+// required" without it, so an empty FileName is rejected before the request.
 func ValidateSFTPFile(opts BulkFileJobOptions) (*FileValidationResponse, error) {
-	return bulkRootFileJob("/validateSFTPfile", opts, false)
+	return bulkRootFileJob("/validateSFTPfile", opts)
 }
 
 // ScoreSFTPFile scores a file from your SFTP/FTP server (POST /scoreSFTPfile).
 // FileName is a plain name such as "my_file.txt".
 func ScoreSFTPFile(opts BulkFileJobOptions) (*FileValidationResponse, error) {
-	return bulkRootFileJob("/scoreSFTPfile", opts, true)
+	return bulkRootFileJob("/scoreSFTPfile", opts)
 }
 
 // EmailFinderSFTPFile runs the email finder on a file from your SFTP/FTP server
 // (POST /emailFinderSFTPfile).
 func EmailFinderSFTPFile(opts BulkFileJobOptions) (*FileValidationResponse, error) {
-	return bulkRootFileJob("/emailFinderSFTPfile", opts, true)
+	return bulkRootFileJob("/emailFinderSFTPfile", opts)
 }
 
 // DomainSearchSFTPFile runs domain search on a file from your SFTP/FTP server
 // (POST /domainSearchSFTPfile).
 func DomainSearchSFTPFile(opts BulkFileJobOptions) (*FileValidationResponse, error) {
-	return bulkRootFileJob("/domainSearchSFTPfile", opts, true)
+	return bulkRootFileJob("/domainSearchSFTPfile", opts)
 }
 
 // ExportSFTPFile exports a validated or scored file back to your SFTP/FTP

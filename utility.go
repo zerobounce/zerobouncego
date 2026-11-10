@@ -259,17 +259,18 @@ func handleErrorPayload(response *http.Response) error {
 	return ErrorFromResponse(response)
 }
 
-// ErrorFromResponse turns an HTTP error body into a short error.
+// ErrorFromResponse turns an HTTP error response into a short error. For a
+// status above 299 it is a *ZBApiError carrying that status.
 // The caller owns closing the body when it does not use handleErrorPayload.
 func ErrorFromResponse(response *http.Response) error {
 	responseBody, err := readLimitedBody(response.Body)
 	if err != nil {
 		if len(responseBody) > 0 && strings.Contains(err.Error(), "not valid JSON") {
-			return err
+			return statusError(response.StatusCode, err.Error())
 		}
-		return errors.New("server error: " + err.Error())
+		return statusError(response.StatusCode, "server error: "+err.Error())
 	}
-	return errors.New(messageFromBody(response.StatusCode, response.Header.Get("Content-Type"), string(responseBody)))
+	return statusError(response.StatusCode, messageFromBody(response.StatusCode, response.Header.Get("Content-Type"), string(responseBody)))
 }
 
 func timedHTTPClient() *http.Client {
@@ -311,6 +312,16 @@ func httpGet(requestURL string) (*http.Response, error) {
 
 // DoGetRequest does a GET request to the API
 func DoGetRequest(requestURL string, object APIResponse) error {
+	return doGetRequestWith(requestURL, object, decodeJSONBody)
+}
+
+// doGetNonMessageRequest is DoGetRequest for a call whose result is never a
+// bare message, so a message-only body is reported as an error.
+func doGetNonMessageRequest(requestURL string, object APIResponse) error {
+	return doGetRequestWith(requestURL, object, decodeNonMessageJSONBody)
+}
+
+func doGetRequestWith(requestURL string, object APIResponse, decode func(int, string, []byte, interface{}) error) error {
 	response, err := httpGet(requestURL)
 	if err != nil {
 		return err
@@ -324,7 +335,7 @@ func DoGetRequest(requestURL string, object APIResponse) error {
 		}
 		return err
 	}
-	return decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, object)
+	return decode(response.StatusCode, response.Header.Get("Content-Type"), body, object)
 }
 
 // DoPostFormRequest POSTs application/x-www-form-urlencoded data to the main API.

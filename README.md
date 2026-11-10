@@ -25,8 +25,14 @@ zerobouncego.LoadEnvFromFile()
 ```
 3. by settings explicitly in code, using the following method, where a preferred URI can also be provided:
 ```go
-zerobouncego.InitializeWithURI("mysecretapikey", ZB_API_URL_DEFAULT)
+zerobouncego.InitializeWithURI("mysecretapikey", zerobouncego.ZB_API_URL_DEFAULT)
 ```
+
+`LoadEnvFromFile` loads `.env` and then calls `Initialize` with
+`ZEROBOUNCE_API_KEY` (or `ZERO_BOUNCE_API_KEY`), so it replaces a key set earlier
+with `Initialize` (with an empty one if neither variable is set). Use one or the
+other. To use a second key alongside the package-level one, see `New` under
+Validation.
 
 ### Mocking / Other URI
 If you need to use a mock service in your tests or otherwise use a different URI you can:
@@ -40,6 +46,8 @@ ZERO_BOUNCE_INBOX_PLACEMENT_URI=    # optional, defaults to the production inbox
 
 Call the setter function (passing empty strings will keep current values):
 ```go
+new_uri := "https://mock.example.com/v2/" // your mock or other API host
+new_bulk_uri := ""                         // "" keeps the current bulk URI
 if err := zerobouncego.SetURI(new_uri, new_bulk_uri); err != nil {
     // Both must be https:// URLs. Nothing is applied when either is rejected,
     // so a typo cannot leave you quietly pointed at the old host.
@@ -99,34 +107,41 @@ func main() {
 package main
 
 import (
-    "fmt"
-    "os"
-    "github.com/zerobounce/zerobouncego/v2"
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego/v2"
 )
 
 func main() {
+	zerobouncego.Initialize("... Your API KEY ...")
 
-    zerobouncego.APIKey = "... Your API KEY ..."
-
-	// For Querying a single E-Mail and IP
-	// IP can also be an empty string
-	// Timeout can also be specified
+	// Validate one address. The IP address can be an empty string.
 	response, error_ := zerobouncego.Validate("possible_typo@example.com", "123.123.123.123")
-	timeoutResponse, timeoutError_ := zerobouncego.ValidateWithTimeout("possible_typo@example.com", "123.123.123.123", "10")
-
 	if error_ != nil {
 		fmt.Println("error occurred: ", error_.Error())
-	} else {
-		// Now you can check status
-		if response.Status == zerobouncego.S_INVALID {
-			fmt.Println("This email is valid")
-		}
-
-		// .. or Sub-status
-		if response.SubStatus == zerobouncego.SS_POSSIBLE_TYPO {
-			fmt.Println("This email might have a typo")
-		}
+		return
 	}
+
+	// Now you can check the status
+	switch response.Status {
+	case zerobouncego.S_VALID:
+		fmt.Println("This email is valid")
+	case zerobouncego.S_INVALID:
+		fmt.Println("This email is invalid")
+	}
+
+	// .. or the sub-status
+	if response.SubStatus == zerobouncego.SS_POSSIBLE_TYPO {
+		fmt.Println("This email might have a typo")
+	}
+
+	// A timeout (3-60 seconds) can also be specified
+	timeoutResponse, error_ := zerobouncego.ValidateWithTimeout("possible_typo@example.com", "123.123.123.123", "10")
+	if error_ != nil {
+		fmt.Println("error occurred: ", error_.Error())
+		return
+	}
+	fmt.Println("status:", timeoutResponse.Status)
 }
 ```
 
@@ -168,6 +183,149 @@ func main() {
 }
 ```
 
+#### Validation options and batch options
+
+`ValidateWithOptions` takes the optional `/validate` parameters: `Timeout`
+(3-60 seconds, as a string), `ActivityData`, `VerifyPlus`, `DomainInfo`,
+`GreylistProcessing`, `CallbackURL`, and `UsePost` to send a form-encoded
+`POST /validate` instead of a `GET`. A nil pointer is not sent.
+`ValidateBatchWithOptions` sends `timeout` (10-120 seconds), `activity_data` and
+`verify_plus` when they are set.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego/v2"
+)
+
+func main() {
+	zerobouncego.Initialize("... Your API KEY ...")
+
+	yes := true
+	response, err := zerobouncego.ValidateWithOptions("valid@example.com", zerobouncego.ValidateOptions{
+		Timeout:      "10",
+		ActivityData: &yes, // fills ActiveInDays / ActiveFirstSeen
+		VerifyPlus:   &yes,
+		UsePost:      true,
+	})
+	if err != nil {
+		fmt.Println("error occurred: ", err.Error())
+		return
+	}
+	fmt.Println(response.Status, response.ActiveInDays.String)
+
+	timeout := 30
+	batch, err := zerobouncego.ValidateBatchWithOptions(
+		[]zerobouncego.EmailToValidate{{EmailAddress: "valid@example.com"}},
+		&zerobouncego.ValidateBatchOptions{Timeout: &timeout, ActivityData: &yes},
+	)
+	if err != nil {
+		fmt.Println("error occurred: ", err.Error())
+		return
+	}
+	fmt.Println(len(batch.EmailBatch), "results")
+}
+```
+
+#### A client with its own key
+
+`New` returns a `Client` that keeps its own API key and base URLs (`APIKey`,
+`URI`, `BulkURI`), so two keys can be used side by side. It does not read or
+change the package-level key set by `Initialize`. Its one method so far is
+`Validate`; every other call uses the package-level key.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego/v2"
+)
+
+func main() {
+	client := zerobouncego.New("... Another API KEY ...")
+	response, err := client.Validate("valid@example.com", "")
+	if err != nil {
+		fmt.Println("error occurred: ", err.Error())
+		return
+	}
+	fmt.Println(response.Status)
+}
+```
+
+#### AI scoring for one email
+
+`ScoreEmail` calls `GET /scoring`; `ScoreEmailPost` sends the same request as a
+form-encoded `POST`.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego/v2"
+)
+
+func main() {
+	zerobouncego.Initialize("... Your API KEY ...")
+	score, err := zerobouncego.ScoreEmail("valid@example.com")
+	if err != nil {
+		fmt.Println("error occurred: ", err.Error())
+		return
+	}
+	fmt.Printf("%s scores %d\n", score.Email, score.Score)
+}
+```
+
+#### Errors
+
+Every failed call returns an `error`. When the API answered with an HTTP status
+above 299 (a refused redirect included), or with a 2xx whose JSON body reports a
+failure, that error is a `*zerobouncego.ZBApiError` carrying `StatusCode`, so a
+Cloudflare 403 can be told apart from an API 400 or 404 or a 429. A 2xx HTML
+page, an empty body, a timeout, and an argument rejected before the request are
+plain errors.
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/zerobounce/zerobouncego/v2"
+)
+
+func main() {
+	zerobouncego.Initialize("... Your API KEY ...")
+	_, err := zerobouncego.Validate("valid@example.com", "")
+	var apiErr *zerobouncego.ZBApiError
+	switch {
+	case err == nil:
+		fmt.Println("ok")
+	case errors.As(err, &apiErr) && apiErr.StatusCode == 403:
+		fmt.Println("blocked before reaching the API:", apiErr.Message)
+	case errors.As(err, &apiErr):
+		fmt.Printf("API error (HTTP %d): %s\n", apiErr.StatusCode, apiErr.Message)
+	default:
+		fmt.Println("request failed:", err)
+	}
+}
+```
+
+Requests time out after 120 seconds, and the time covers reading the whole
+response, so a large bulk results download on a slow connection can fail with a
+timeout. A non-zero `http.DefaultClient.Timeout` is used instead of the 120
+seconds: set it before the call (and before `NewWarmupClient`) to allow longer.
+Redirects are never followed, because the API key travels with the request; a
+3xx answer is the error `ZeroBounce returned a redirect, which this client does
+not follow.`
+
 #### Bulk API v2 (validation and getfile)
 
 Bulk validation and scoring target the v2 bulk API. Docs: [v2 send file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-send-file), [v2 file status](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-file-status), [v2 get file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file).
@@ -179,10 +337,19 @@ Optional [v2 getfile](https://www.zerobounce.net/docs/email-validation-api-quick
 Non-CSV JSON error bodies—including some HTTP 200 responses with `"success": false`—produce an error; nothing is written to the result writer. For custom handling of raw bodies, use `GetFileJSONIndicatesError` and `FormatGetFileErrorMessage`.
 
 ```go
+fileID := "<FILE_ID>" // from BulkValidationSubmit
+w, err := os.Create("results.csv")
+if err != nil {
+	log.Fatal(err)
+}
+defer w.Close()
+
 dt := zerobouncego.DownloadTypeCombined
 ad := true
 opts := &zerobouncego.GetFileOptions{DownloadType: &dt, ActivityData: &ad}
-err := zerobouncego.BulkValidationResultWithOptions(fileID, w, opts)
+if err := zerobouncego.BulkValidationResultWithOptions(fileID, w, opts); err != nil {
+	log.Fatal(err)
+}
 ```
 
 #### 3. Bulk file validation
@@ -311,8 +478,9 @@ import (
 
 
 func main() {
+	// Or zerobouncego.LoadEnvFromFile() to read the key from .env instead.
+	// Calling it after Initialize would replace this key with the file's.
 	zerobouncego.Initialize("... Your API KEY ...")
-	zerobouncego.LoadEnvFromFile()
 	import_file_path := "./emails.csv"
 	result_file_path := "./validation_result.csv"
 
@@ -403,6 +571,94 @@ Example export file:
 "valid@example.com","10"
 "toxic@example.com","2"
 
+```
+
+#### Bulk email finder, bulk domain search and list evaluator
+
+These upload a CSV like `BulkValidationSubmit` and follow the same
+submit / status / result / delete pattern. `BulkEmailFinderSubmit` needs
+`DomainColumn` and one of `FirstNameColumn` or `FullNameColumn` (columns are
+1-based), and says which is missing before uploading. `has_header_row` is always
+sent, `false` included.
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/zerobounce/zerobouncego/v2"
+)
+
+func main() {
+	zerobouncego.Initialize("... Your API KEY ...")
+
+	file, err := os.Open("people.csv") // domain,first_name,last_name
+	if err != nil {
+		fmt.Println("error while opening the file: ", err.Error())
+		return
+	}
+	defer file.Close()
+
+	submitted, err := zerobouncego.BulkEmailFinderSubmit(zerobouncego.EmailFinderCsvFile{
+		File: file, FileName: "people.csv", HasHeaderRow: true,
+		DomainColumn: 1, FirstNameColumn: 2, LastNameColumn: 3,
+	})
+	if err != nil {
+		fmt.Println("error while submitting data: ", err.Error())
+		return
+	}
+
+	status, err := zerobouncego.BulkEmailFinderFileStatus(submitted.FileId)
+	if err != nil {
+		fmt.Println("error while polling: ", err.Error())
+		return
+	}
+	if status.Percentage() == 100 {
+		result, err := os.Create("people_found.csv")
+		if err != nil {
+			fmt.Println("error on creating result file: ", err.Error())
+			return
+		}
+		defer result.Close()
+		if err := zerobouncego.BulkEmailFinderResult(submitted.FileId, result); err != nil {
+			fmt.Println("error on fetching the result: ", err.Error())
+		}
+	}
+}
+```
+
+`BulkDomainSearchSubmit` takes a `DomainSearchCsvFile` (`File`, `FileName`,
+`HasHeaderRow`, `DomainColumn`) and pairs with `BulkDomainSearchFileStatus`,
+`BulkDomainSearchResult` and `BulkDomainSearchFileDelete`.
+`ListEvaluatorSubmit` takes a `ListEvaluatorCsvFile` (`File`, `FileName`,
+`EmailAddressColumn`); `GetListEvaluatorResult` reads the evaluation, and
+`SendEvaluatedFile` sends the evaluated file on for validation. The list
+evaluator lives at `LIST_EVALUATOR_URI`.
+
+#### Filters
+
+Custom allow/block filters on the main API. Each call takes a `rule`, a
+`target` and a `value`; see the ZeroBounce API docs for the accepted rule and
+target values.
+
+```go
+added, err := zerobouncego.AddFilter("allow", "domain", "example.com")
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(added)
+
+filters, err := zerobouncego.ListFilters(false) // true sends a POST
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(string(filters))
+
+if _, err := zerobouncego.DeleteFilter("allow", "domain", "example.com"); err != nil {
+	log.Fatal(err)
+}
 ```
 
 ## S3 and SFTP/FTP bulk
@@ -499,13 +755,17 @@ zerobouncego.GetInboxPlacementProviders()
 zerobouncego.GetInboxPlacementTestTypes()
 
 testType := 1
-created, _ := zerobouncego.CreateInboxPlacementTest("Launch", &zerobouncego.CreateInboxPlacementTestOptions{
+created, err := zerobouncego.CreateInboxPlacementTest("Launch", &zerobouncego.CreateInboxPlacementTestOptions{
     TestType:    &testType,
     SenderEmail: "news@example.com",
     WebhookURL:  "https://example.com/ipt-webhook",
 })
+if err != nil {
+    log.Fatal(err)
+}
 
 // Send your campaign to the seeds in `created`, then read the results.
+fmt.Println(created)
 zerobouncego.GetInboxPlacementTest("<TEST_ID>")
 
 page, pageSize := 1, 50
@@ -516,6 +776,90 @@ zerobouncego.SetInboxPlacementWebhook("https://example.com/ipt-webhook")
 zerobouncego.GetInboxPlacementWebhook()
 zerobouncego.DeleteInboxPlacementTest("<TEST_ID>")
 ```
+
+## Warmup API
+
+The [Warmup API](https://www.zerobounce.net/docs/warmup-api) is a separate
+product from email validation: it has its own host (`WarmupDefaultBaseURL`,
+`https://warmup-api.zerobounce.net`) and its own **Warmup API key**, which is
+bound to one team and sent in an `API-Key` header. Use a `WarmupClient` for it.
+The client does not use the validation key, `Initialize`, or `SetURI`, and the
+validation functions never see the Warmup key.
+
+`NewWarmupClient(apiKey, baseURL)` rejects an empty key, and a base URL that is
+not `https://`; pass `""` for the default host. Methods return the decoded JSON
+as a `map[string]interface{}` (a list answer is wrapped under `"data"`),
+`DownloadSeeds` and `DownloadStatistics` return CSV text, and a failed call is a
+`*ZBApiError` with the HTTP status (for example 429 while a custom engagement
+rule is in its 7-day cooldown). Out-of-range arguments are rejected before the
+request.
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/zerobounce/zerobouncego/v2"
+)
+
+func main() {
+	// A Warmup API key, not the validation API key. "" uses WarmupDefaultBaseURL.
+	warmup, err := zerobouncego.NewWarmupClient(os.Getenv("ZEROBOUNCE_WARMUP_API_KEY"), "")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	accounts, err := warmup.ListSendingAccounts()
+	if err != nil {
+		var apiErr *zerobouncego.ZBApiError
+		if errors.As(err, &apiErr) {
+			log.Fatalf("Warmup API error (HTTP %d): %s", apiErr.StatusCode, apiErr.Message)
+		}
+		log.Fatal(err)
+	}
+	fmt.Println(accounts)
+
+	// Register a mailbox you run yourself, with the Default engagement rule (0).
+	rule := 0
+	_, err = warmup.AddSendingAccount("sender@example.com", "self_managed",
+		&zerobouncego.WarmupSendingAccountOptions{EngagementRuleID: &rule})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Dates are a time.Time or a "YYYY-MM-DD" string.
+	perDay, err := warmup.GetStatisticsPerDay("sender@example.com", "2026-11-01", time.Now())
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(perDay)
+
+	seeds, err := warmup.DownloadSeeds() // CSV: seed,provider
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(seeds)
+}
+```
+
+All 26 methods:
+
+| Area | Methods |
+| --- | --- |
+| Sending accounts | `ListSendingAccounts`, `GetSendingAccount`, `AddSendingAccount` (`WarmupSendingAccountOptions`), `UpdateSendingAccount`, `DeleteSendingAccount`, `ChangeFromAddress`, `ListFromAddresses` (`WarmupListFromAddressesOptions`) |
+| Engagement rules | `GetEngagementRules`, `SetEngagementRule`, `GetCustomEngagement`, `CreateCustomEngagement`, `UpdateCustomEngagement`, `DeleteCustomEngagement` |
+| Seeds and statistics | `GetSeeds`, `DownloadSeeds`, `GetSeedCount`, `GetProgressToday`, `GetSentToday`, `GetEmailsPerDay`, `GetStatistics`, `GetStatisticsPerDay`, `GetStatisticsDetailed`, `DownloadStatistics`, `GetFromAddressStatistics` |
+| Utilities | `CheckDomainDmarc` (takes an email address), `TestSMTPConfiguration` |
+
+`AddSendingAccount` takes an onboarding model from `WarmupOnboardingModels`
+(`self_managed`, which needs `EngagementRuleID`, or `zb_managed`); for
+`zb_managed`, `EmailContent["types_of_emails"]` is a `[]string` drawn from
+`WarmupEmailTypes`. `DeleteSendingAccount` cannot be undone.
 
 ## Email Finder
 Email Finder allows you to search for new business email addresses using our proprietary technologies
@@ -576,17 +920,30 @@ docker compose build go
 docker compose run --rm go
 ```
 
-This runs unit tests only (`-short` skips integration tests that need a real API key).
+This runs unit tests only (`go test ./... -cover -short -v`); nothing calls the live API.
 
 ### Unit and integration tests (local)
-This package contains both unit tests and integration tests (which are excluded from the test suite). Unit test files are the ones ending in "_test.go" (as go requires) and the integration tests are ending in ("_integration_t.go").
 
-In order to run the integration tests:
-- set appropriate `ZEROBOUNCE_API_KEY` (or `ZERO_BOUNCE_API_KEY`) environment variable
-- rename all "_integration_t.go" into "_integration_test.go"
-- run either individual or all tests (`go test . -v`)
+Unit tests mock every request and never reach the network:
 
-NOTE: currently, the unit tests can be updated such that, by removing the mocking and explicit API key setting, they should work as integration tests as well AS LONG AS a valid API key is provided via environment
+```bash
+go test -short ./...
+```
+
+A plain `go test ./...` is offline as well. The integration tests in
+`api_integration_test.go` and `batch_validate_integration_test.go` call the live
+API, so they skip unless you opt in with `ZEROBOUNCE_INTEGRATION=1` (and they
+always skip under `-short`). `TestValidate` and `TestBulkEmailValidation` also
+need a key in `ZEROBOUNCE_API_KEY` (or `ZERO_BOUNCE_API_KEY`); they validate the
+`@example.com` sandbox addresses.
+
+```bash
+ZEROBOUNCE_INTEGRATION=1 ZEROBOUNCE_API_KEY=... go test -run 'TestValidate$|TestInvalidApiKey|TestBulkEmailValidation' -v .
+```
+
+`live_api_test.go` is a fuller live suite behind the `live` build tag
+(`go test -tags live -v -run TestLive ./...`); its header lists the environment
+variables it reads and which calls spend credits.
 
 ## Publish
 

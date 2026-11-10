@@ -40,7 +40,7 @@ func findEmailInternal(domain, company_name, first_name, middle_name, last_name 
 		return response, error_
 	}
 
-	error_ = DoGetRequest(url_to_request, response)
+	error_ = doGetNonMessageRequest(url_to_request, response)
 	return response, error_
 }
 

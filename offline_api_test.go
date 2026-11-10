@@ -177,6 +177,35 @@ func fakeResponse(req recordedRequest) *http.Response {
 		status = 400
 		body = "Error: Error: api_key is invalid"
 		header.Set("Content-Type", "text/plain")
+	// LIVE (2026-11-11): what an invalid or drained key gets back, each with an HTTP 200 and no "success" field.
+	case strings.HasPrefix(key, "dead-key-") && strings.Contains(req.Path, "guessformat"):
+		body = `{"Message":"Invalid API key or your account ran out of credits"}`
+		header.Set("Content-Type", "application/json")
+	case strings.HasPrefix(key, "dead-key-") && strings.Contains(req.Path, "filters"):
+		body = `{  "Error": "Invalid API key or your account ran out of credits"}`
+		header.Set("Content-Type", "application/json")
+	case strings.HasPrefix(key, "dead-key-") && strings.Contains(req.Path, "getapiusage"):
+		body = `{"error":"Invalid API key"}`
+		header.Set("Content-Type", "application/json")
+	case strings.HasPrefix(key, "dead-key-") && strings.Contains(req.Path, "getcredits"):
+		body = `{"Credits":"-1"}`
+		header.Set("Content-Type", "application/json")
+	case strings.HasPrefix(key, "dead-key-"):
+		body = `{"error":"Invalid API key or your account ran out of credits"}`
+		header.Set("Content-Type", "application/json")
+	case strings.HasPrefix(key, "error-message-only-"):
+		body = `{"error_message":"Something went wrong"}`
+		header.Set("Content-Type", "application/json")
+	case strings.HasPrefix(key, "blank-error-") && strings.HasSuffix(req.Path, "/validate"):
+		body = `{"address":"a@example.com","status":"valid","error":""}`
+		header.Set("Content-Type", "application/json")
+	// The documented answer to a repeated greylist_processing validate: a result, not an error.
+	case strings.HasPrefix(key, "greylist-pending-") && strings.HasSuffix(req.Path, "/validate"):
+		body = `{"Message":"Greylist validation still in progress. Please try again later."}`
+		header.Set("Content-Type", "application/json")
+	case strings.HasPrefix(key, "filter-message-") && strings.Contains(req.Path, "filters"):
+		body = `{"Message":"Filter has been added."}`
+		header.Set("Content-Type", "application/json")
 	case strings.Contains(req.Path, "validatebatch") && strings.HasPrefix(key, "batch-account-"):
 		status = 200
 		body = `{"email_batch":[],"errors":[{"email_address":"all","error":"Invalid API Key or your account ran out of credits"}]}`
@@ -290,8 +319,8 @@ func strPtr(value string) *string {
 }
 
 func TestOfflineVersionMatchesPackage(t *testing.T) {
-	if Version != "2.1.4" {
-		t.Fatalf("Version = %s, want 2.1.4", Version)
+	if Version != "2.2.0" {
+		t.Fatalf("Version = %s, want 2.2.0", Version)
 	}
 }
 
@@ -779,7 +808,7 @@ func TestOfflinePriority3(t *testing.T) {
 		FileName:           "inbox.csv",
 		EmailAddressColumn: &column,
 		HasHeaderRow:       &header,
-		RemoveDuplicate:    &remove,
+		RemoveDuplicates:   &remove,
 		ReturnURL:          "https://example.com/done",
 	})
 	if err != nil {
@@ -795,8 +824,8 @@ func TestOfflinePriority3(t *testing.T) {
 	if request.Fields["has_header_row"] != "false" || request.Fields["return_url"] != "https://example.com/done" {
 		t.Fatalf("%#v", request.Fields)
 	}
-	// The deprecated RemoveDuplicate now feeds the one documented field, and
-	// the misspelled twin is no longer on the wire.
+	// Only the documented remove_duplicates goes on the wire, never the
+	// misspelled remove_duplicate twin.
 	if request.Fields["remove_duplicates"] != "true" {
 		t.Fatalf("%#v", request.Fields)
 	}
@@ -983,6 +1012,81 @@ func TestOfflineErrorBodiesStayShort(t *testing.T) {
 
 	if fake.size() == 0 {
 		t.Fatal("expected requests")
+	}
+}
+
+// An invalid or drained key answers with an HTTP 200 and an error-only body.
+// Every call must report it as an error carrying the API's own message, not
+// return an empty result.
+func TestOfflineDeadKeyIsAnError(t *testing.T) {
+	useFake(t)
+	Initialize("dead-key-user")
+	const drained = "Invalid API key or your account ran out of credits"
+	expect := func(name string, err error, want string) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("%s: a dead key returned no error", name)
+		}
+		if err.Error() != want {
+			t.Fatalf("%s: error = %q, want %q", name, err.Error(), want)
+		}
+	}
+	_, err := Validate("a@example.com", "")
+	expect("Validate", err, drained)
+	_, err = ValidateWithOptions("a@example.com", ValidateOptions{UsePost: true})
+	expect("Validate POST", err, drained)
+	_, err = GetActivityData("a@example.com")
+	expect("GetActivityData", err, drained)
+	_, err = GetApiUsage(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC))
+	expect("GetApiUsage", err, "Invalid API key")
+	_, err = ScoreEmail("a@example.com")
+	expect("ScoreEmail", err, drained)
+	_, err = FindEmailByDomainFirstName("example.com", "john")
+	expect("FindEmail", err, drained)
+	_, err = DomainSearchByDomain("example.com")
+	expect("DomainSearch", err, drained)
+	_, err = AddFilter("allow", "email", "x@example.com")
+	expect("AddFilter", err, drained)
+	_, err = DeleteFilter("allow", "email", "x@example.com")
+	expect("DeleteFilter", err, drained)
+	_, err = ListFilters(false)
+	expect("ListFilters", err, drained)
+	_, err = ListFilters(true)
+	expect("ListFilters POST", err, drained)
+
+	// -1 is the documented credit balance of an invalid key, not an error.
+	credits, err := GetCredits()
+	if err != nil || credits.Credits() != -1 {
+		t.Fatalf("GetCredits = %+v, %v", credits, err)
+	}
+
+	Initialize("error-message-only-user")
+	_, err = Validate("a@example.com", "")
+	expect("error_message only", err, "Something went wrong")
+}
+
+// The error-only check must not turn a real result into a failure.
+func TestOfflineMessageAndBlankErrorAreNotFailures(t *testing.T) {
+	useFake(t)
+	Initialize("blank-error-user")
+	validated, err := Validate("a@example.com", "")
+	if err != nil || validated.Status != "valid" {
+		t.Fatalf("blank error beside a result: %+v, %v", validated, err)
+	}
+
+	Initialize("greylist-pending-user")
+	validated, err = Validate("a@example.com", "")
+	if err != nil {
+		t.Fatalf("a pending greylist validate is a result: %v", err)
+	}
+	if validated.Message != "Greylist validation still in progress. Please try again later." {
+		t.Fatalf("Message = %q", validated.Message)
+	}
+
+	Initialize("filter-message-user")
+	added, err := AddFilter("allow", "email", "x@example.com")
+	if err != nil || added["Message"] != "Filter has been added." {
+		t.Fatalf("AddFilter success: %+v, %v", added, err)
 	}
 }
 

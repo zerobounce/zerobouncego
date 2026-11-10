@@ -38,7 +38,7 @@ func domainSearchInternal(domain, company_name string) (*DomainSearchResponse, e
 		return response, error_
 	}
 
-	error_ = DoGetRequest(url_to_request, response)
+	error_ = doGetNonMessageRequest(url_to_request, response)
 	return response, error_
 }
 

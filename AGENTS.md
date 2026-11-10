@@ -27,7 +27,7 @@ go test -short -count=1 .
 go test -short -race .
 ```
 
-CI (`.github/workflows/sdk_ci.yml`) runs `go test ./... -cover -short -v` on Go 1.27. `-short` skips tests that call the live API. That test run is the typecheck; there is no separate lint step.
+CI (`.github/workflows/sdk_ci.yml`) runs `go test ./... -cover -short -v` on Go 1.27. `-short` skips tests that call the live API; a plain `go test ./...` skips them too unless `ZEROBOUNCE_INTEGRATION=1` is set. That test run is the typecheck; there is no separate lint step.
 
 ## Conventions
 
@@ -63,5 +63,5 @@ Publishing and pushing tags need a maintainer's explicit approval. Do not bump t
 
 - **Four base URLs.** `URI`, `BULK_URI` (ends in `/v2/`), plus `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI`. The last two are separate values rather than paths built from `BULK_URI`; `SetURI` rebases them onto the bulk host it is given unless `ZERO_BOUNCE_LIST_EVALUATOR_URI` / `ZERO_BOUNCE_INBOX_PLACEMENT_URI` set them. `SetURI` returns an `error` rather than swallowing a non-https value, and applies nothing when either argument is rejected. `Initialize` resets `URI` to `ZERO_BOUNCE_URI` when it is set, otherwise to the production default. The S3/SFTP jobs use `bulkAPIRoot()`, which strips the `/v2`.
 - **Two bulk shapes are easy to get wrong.** `ValidateSFTPFile`'s `FileName` is optional — leaving it empty uses the input bucket from the account's settings, and every other job requires it. `ExportSFTPFile` sends `export_path`, not the `export_bucket` that `ExportS3File` sends. Both export fields are optional and fall back to the account's settings.
-- **`return_url` is required by every S3/SFTP file job.** The docs call it optional; the live API answers `Provided return URL is not permitted: None` without it. `bulkRootJobFields` checks `file_name` and `return_url` and builds the four shared fields for all of them, including `ValidateS3File` and `ScoreS3File`. Only `remove_duplicates` goes on the wire — `RemoveDuplicate` is deprecated and feeds it only when `RemoveDuplicates` is nil.
+- **`return_url` is required by every S3/SFTP file job.** The docs call it optional; the live API answers `Provided return URL is not permitted: None` without it. `bulkRootJobFields` checks `file_name` and `return_url` and builds the four shared fields for all of them, including `ValidateS3File` and `ScoreS3File`. Only `remove_duplicates` goes on the wire (from `RemoveDuplicates`); never send the misspelled `remove_duplicate`.
 - **The Inbox Placement Tester authenticates with `Authorization: Bearer`,** never with an `api_key` query parameter. It sends `page_size`, not `pageSize`, which the API ignores.

@@ -199,15 +199,9 @@ func SendEvaluatedFile(fileID string) (*FileValidationResponse, error) {
 // FileName and ReturnURL are required: the live API rejects a job without
 // either. The remaining fields are omitted until they are set.
 type ValidateS3FileOptions struct {
-	FileName         string
-	HasHeaderRow     *bool
-	RemoveDuplicates *bool
-	// RemoveDuplicate is the misspelled twin of RemoveDuplicates. Only
-	// remove_duplicates is documented, and it is now the only one sent.
-	//
-	// Deprecated: set RemoveDuplicates instead. This field is used only when
-	// RemoveDuplicates is nil, and it will be removed in the next major version.
-	RemoveDuplicate    *bool
+	FileName           string
+	HasHeaderRow       *bool
+	RemoveDuplicates   *bool
 	EmailAddressColumn *int
 	ReturnURL          string
 	FirstNameColumn    int
@@ -217,18 +211,10 @@ type ValidateS3FileOptions struct {
 	AllowPhase2        *bool
 }
 
-// removeDuplicates folds the deprecated RemoveDuplicate into RemoveDuplicates.
-func (opts ValidateS3FileOptions) removeDuplicates() *bool {
-	if opts.RemoveDuplicates != nil {
-		return opts.RemoveDuplicates
-	}
-	return opts.RemoveDuplicate
-}
-
 // ValidateS3File submits an S3 object for bulk validation
 // (POST /validateS3file). FileName and ReturnURL are required.
 func ValidateS3File(opts ValidateS3FileOptions) (*FileValidationResponse, error) {
-	fields, err := bulkRootJobFields(opts.FileName, opts.HasHeaderRow, opts.removeDuplicates(), opts.ReturnURL)
+	fields, err := bulkRootJobFields(opts.FileName, opts.HasHeaderRow, opts.RemoveDuplicates, opts.ReturnURL)
 	if err != nil {
 		return nil, err
 	}
@@ -258,31 +244,17 @@ func ValidateS3File(opts ValidateS3FileOptions) (*FileValidationResponse, error)
 // FileName and ReturnURL are required: the live API rejects a job without
 // either. The remaining fields are omitted until they are set.
 type ScoreS3FileOptions struct {
-	FileName         string
-	HasHeaderRow     *bool
-	RemoveDuplicates *bool
-	// RemoveDuplicate is the misspelled twin of RemoveDuplicates. Only
-	// remove_duplicates is documented, and it is now the only one sent.
-	//
-	// Deprecated: set RemoveDuplicates instead. This field is used only when
-	// RemoveDuplicates is nil, and it will be removed in the next major version.
-	RemoveDuplicate    *bool
+	FileName           string
+	HasHeaderRow       *bool
+	RemoveDuplicates   *bool
 	EmailAddressColumn *int
 	ReturnURL          string
-}
-
-// removeDuplicates folds the deprecated RemoveDuplicate into RemoveDuplicates.
-func (opts ScoreS3FileOptions) removeDuplicates() *bool {
-	if opts.RemoveDuplicates != nil {
-		return opts.RemoveDuplicates
-	}
-	return opts.RemoveDuplicate
 }
 
 // ScoreS3File submits an S3 object for AI scoring (POST /scoreS3file).
 // FileName and ReturnURL are required.
 func ScoreS3File(opts ScoreS3FileOptions) (*FileValidationResponse, error) {
-	fields, err := bulkRootJobFields(opts.FileName, opts.HasHeaderRow, opts.removeDuplicates(), opts.ReturnURL)
+	fields, err := bulkRootJobFields(opts.FileName, opts.HasHeaderRow, opts.RemoveDuplicates, opts.ReturnURL)
 	if err != nil {
 		return nil, err
 	}

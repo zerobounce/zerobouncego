@@ -123,7 +123,7 @@ func (c *WarmupClient) send(method, path string, params url.Values, body interfa
 	if response.StatusCode >= 300 && response.StatusCode < 400 {
 		return response.StatusCode, nil, response.Header, &ZBApiError{
 			StatusCode: response.StatusCode,
-			Message:    "ZeroBounce returned a redirect, which this client does not follow.",
+			Message:    redirectRefusedMessage,
 		}
 	}
 	payload, err := io.ReadAll(response.Body)

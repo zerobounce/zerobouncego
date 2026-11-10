@@ -11,14 +11,43 @@ import (
 const maxJSONBodyBytes = 2 << 20
 
 // ZBApiError is a failed API response. It carries the HTTP status so callers
-// can tell a 403 (Cloudflare) from a 400/404 (API) or a 429 (Warmup rate
-// limit). Both the validation client and the Warmup client return it.
+// can tell a 403 (Cloudflare) from a 400/404 (API) or a 429 (rate limit).
+// It may be wrapped, so match it with errors.As.
+//
+// The validation functions return it:
+//
+//   - for every response with an HTTP status above 299, a refused redirect
+//     (3xx) included, whatever the body;
+//   - for a 2xx whose JSON body reports a failure ({"success": false, ...}, or
+//     an error-only body such as {"error": "Invalid API key ..."}), with
+//     StatusCode set to that 2xx status.
+//
+// A 2xx that is not an API response at all (an HTML page, an empty body,
+// non-JSON text) is a plain error there. The Warmup client returns a
+// ZBApiError for every failed response, whatever its status.
+//
+// A transport failure such as a timeout, a body that cannot be read, and an
+// argument rejected before any request is sent are plain errors.
 type ZBApiError struct {
 	StatusCode int
 	Message    string
 }
 
 func (e *ZBApiError) Error() string { return e.Message }
+
+// redirectRefusedMessage reports a 3xx. Redirects are never followed: the API
+// key travels with the request, and a redirect could send it to another host.
+const redirectRefusedMessage = "ZeroBounce returned a redirect, which this client does not follow."
+
+// statusError is the error for a response that is not a usable API result. An
+// HTTP error status (above 299) becomes a *ZBApiError carrying that status; a
+// 2xx keeps a plain error. The message text is the same either way.
+func statusError(statusCode int, message string) error {
+	if statusCode > 299 {
+		return &ZBApiError{StatusCode: statusCode, Message: message}
+	}
+	return errors.New(message)
+}
 
 // apiError builds a ZBApiError, or nil when there is no message.
 func apiError(statusCode int, message string) error {
@@ -106,8 +135,62 @@ func htmlTitle(body string) string {
 	return strings.TrimSpace(body[openEnd+1 : openEnd+closeRel])
 }
 
+// errorOnlyKeys only ever carry an error. "message" and "Message" are not
+// among them: successful responses use those too (a bulk submit answers
+// {"success": true, "message": "File Accepted"}, and a repeated greylist
+// validate answers {"Message": "Greylist validation still in progress..."}).
+var errorOnlyKeys = []string{"error", "error_message", "Error"}
+
+// messageKeys are every key a message may sit under.
+var messageKeys = []string{"error", "message", "error_message", "Message", "Error", "detail"}
+
 func firstAPIErrorField(object map[string]interface{}) string {
-	for _, key := range []string{"error", "message", "error_message", "Message"} {
+	return apiErrorField(object, messageKeys)
+}
+
+// errorOnlyMessage is the API's own message when a 2xx body is an error with
+// no "success" field to gate on. LIVE: an invalid or drained key answers
+// validate, activity and getapiusage with {"error": "..."}, and the filters
+// with {"Error": "..."}, all on an HTTP 200.
+func errorOnlyMessage(object map[string]interface{}) string {
+	if _, found := object["success"]; found {
+		return ""
+	}
+	return apiErrorField(object, errorOnlyKeys)
+}
+
+// messageOnlyBody reports whether a JSON body is nothing but a message: an
+// object with no "success" field whose keys are all message keys, at least
+// one a non-empty string. Only for calls whose result is never a bare
+// message. LIVE: guessformat answers an invalid or drained key with an HTTP
+// 200 and {"Message": "Invalid API key or your account ran out of credits"}.
+// validate is not one of them: a repeated greylist validate answers with a
+// bare Message, and that is a result.
+func messageOnlyBody(body []byte) bool {
+	var object map[string]interface{}
+	if json.Unmarshal(body, &object) != nil || len(object) == 0 {
+		return false
+	}
+	if _, found := object["success"]; found {
+		return false
+	}
+	for key := range object {
+		known := false
+		for _, candidate := range messageKeys {
+			if key == candidate {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return false
+		}
+	}
+	return apiErrorField(object, messageKeys) != ""
+}
+
+func apiErrorField(object map[string]interface{}, keys []string) string {
+	for _, key := range keys {
 		value, ok := object[key]
 		if !ok || value == nil {
 			continue
@@ -129,6 +212,9 @@ func firstAPIErrorField(object map[string]interface{}) string {
 }
 
 func messageFromBody(status int, contentType, body string) string {
+	if status >= 300 && status < 400 {
+		return redirectRefusedMessage
+	}
 	if bodyLooksLikeHTML(body) || contentTypeIsHTML(contentType) {
 		title := htmlTitle(body)
 		if title == "" {
@@ -177,11 +263,11 @@ func ensureJSONAPIBody(status int, contentType string, body []byte) error {
 	success := status >= 200 && status < 300
 	text := string(body)
 	if !success || strings.TrimSpace(text) == "" || bodyLooksLikeHTML(text) || contentTypeIsHTML(contentType) {
-		return errors.New(messageFromBody(status, contentType, text))
+		return statusError(status, messageFromBody(status, contentType, text))
 	}
 	trimmed := strings.TrimSpace(text)
 	if trimmed[0] != '{' && trimmed[0] != '[' {
-		return errors.New(messageFromBody(status, contentType, text))
+		return statusError(status, messageFromBody(status, contentType, text))
 	}
 	// {"success": false, ...} on an HTTP 200 is a failure, not a result. The
 	// live API answers an unknown file id that way, with a 200.
@@ -189,6 +275,9 @@ func ensureJSONAPIBody(status int, contentType string, body []byte) error {
 		var probe map[string]interface{}
 		if json.Unmarshal(body, &probe) == nil {
 			if failed, found := probe["success"]; found && isFalsyAPISuccess(failed) {
+				return apiError(status, messageFromBody(status, contentType, text))
+			}
+			if errorOnlyMessage(probe) != "" {
 				return apiError(status, messageFromBody(status, contentType, text))
 			}
 		}
@@ -218,9 +307,21 @@ func decodeJSONBody(status int, contentType string, body []byte, dest interface{
 	return nil
 }
 
+// decodeNonMessageJSONBody is decodeJSONBody for a call whose result is
+// never a bare message, so a message-only body is a failure.
+func decodeNonMessageJSONBody(status int, contentType string, body []byte, dest interface{}) error {
+	if err := ensureJSONAPIBody(status, contentType, body); err != nil {
+		return err
+	}
+	if messageOnlyBody(body) {
+		return apiError(status, messageFromBody(status, contentType, string(body)))
+	}
+	return decodeJSONBody(status, contentType, body, dest)
+}
+
 func getFileBodyError(status int, contentType, body string) error {
 	if bodyLooksLikeHTML(body) || contentTypeIsHTML(contentType) || status != 200 {
-		return errors.New(messageFromBody(status, contentType, body))
+		return statusError(status, messageFromBody(status, contentType, body))
 	}
 	if shouldTreatGetFileBodyAsError(body, contentType) {
 		message := stripErrorPrefix(strings.TrimSpace(FormatGetFileErrorMessage(strings.TrimSpace(body))))
