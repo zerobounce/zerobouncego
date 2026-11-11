@@ -2,6 +2,7 @@ package zerobouncego
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -519,4 +520,78 @@ func TestListInboxPlacementTestsErrorBody(t *testing.T) {
 
 	_, err := ListInboxPlacementTests(nil)
 	assert.ErrorContains(t, err, "Invalid token")
+}
+
+// Every Inbox Placement call checks an HTTP 200 the way the other calls do.
+// They used to decode any 2xx as a result: {"error": ...} and
+// {"success": false} came back as payloads with a nil error, and an HTML page
+// surfaced as a raw JSON parse error.
+func TestInboxPlacement200FailureBodies(t *testing.T) {
+	calls := map[string]func() error{
+		"GetInboxPlacementProviders": func() error { _, err := GetInboxPlacementProviders(); return err },
+		"GetInboxPlacementTestTypes": func() error { _, err := GetInboxPlacementTestTypes(); return err },
+		"CreateInboxPlacementTest":   func() error { _, err := CreateInboxPlacementTest("Launch", nil); return err },
+		"GetInboxPlacementTest":      func() error { _, err := GetInboxPlacementTest("1"); return err },
+		"ListInboxPlacementTests":    func() error { _, err := ListInboxPlacementTests(nil); return err },
+		"DeleteInboxPlacementTest":   func() error { return DeleteInboxPlacementTest("1") },
+		"GetInboxPlacementWebhook":   func() error { _, err := GetInboxPlacementWebhook(); return err },
+		"SetInboxPlacementWebhook":   func() error { _, err := SetInboxPlacementWebhook("https://example.com/ipt"); return err },
+	}
+	cases := []struct {
+		name, contentType, body string
+		apiError                bool
+		message                 string
+	}{
+		{"error-only", "application/json", `{"error":"Invalid API key"}`, true, "Invalid API key"},
+		{"success-false", "application/json", `{"success":false,"message":"Test not found."}`, true, "Test not found."},
+		{"html", "text/html", `<html><head><title>Access denied</title></head><body>blocked</body></html>`, false,
+			`ZeroBounce returned an HTML error page ("Access denied") instead of an API response.`},
+	}
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			httpmock.Reset()
+			for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
+				httpmock.RegisterResponder(method, `=~^https://bulkapi\.zerobounce\.net/api/ipt/`,
+					func(*http.Request) (*http.Response, error) {
+						response := httpmock.NewStringResponse(200, c.body)
+						response.Header.Set("Content-Type", c.contentType)
+						return response, nil
+					})
+			}
+			for name, call := range calls {
+				err := call()
+				if err == nil {
+					t.Fatalf("%s: a failure on HTTP 200 came back as a result", name)
+				}
+				if err.Error() != c.message {
+					t.Fatalf("%s: message = %q, want %q", name, err.Error(), c.message)
+				}
+				var api *ZBApiError
+				if errors.As(err, &api) != c.apiError {
+					t.Fatalf("%s: *ZBApiError = %v, want %v (%v)", name, !c.apiError, c.apiError, err)
+				}
+				if c.apiError && api.StatusCode != 200 {
+					t.Fatalf("%s: StatusCode = %d, want 200", name, api.StatusCode)
+				}
+			}
+			if n := httpmock.GetTotalCallCount(); n != len(calls) {
+				t.Fatalf("%d requests, want %d", n, len(calls))
+			}
+		})
+	}
+}
+
+// An empty 2xx is still a success (the API answers DELETE with a 204).
+func TestInboxPlacementEmpty2xxIsASuccess(t *testing.T) {
+	Initialize("mock_key")
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder("DELETE", `=~^https://bulkapi\.zerobounce\.net/api/ipt/test/`,
+		httpmock.NewStringResponder(204, ""))
+	if err := DeleteInboxPlacementTest("1"); err != nil {
+		t.Fatal(err)
+	}
 }

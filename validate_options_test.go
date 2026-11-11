@@ -86,6 +86,8 @@ func TestKeyWithWhitespaceOrControlCharactersIsRejected(t *testing.T) {
 			"BulkFileStatus":  func() error { _, err := BulkValidationFileStatus("f"); return err },
 			"IPT":             func() error { _, err := GetInboxPlacementProviders(); return err },
 			"Client.Validate": func() error { _, err := New(key).Validate("a@example.com", ""); return err },
+			// The Warmup key is checked once, when the client is built.
+			"NewWarmupClient": func() error { _, err := NewWarmupClient(key, ""); return err },
 		}
 		for name, call := range checks {
 			err := call()
@@ -102,6 +104,9 @@ func TestKeyWithWhitespaceOrControlCharactersIsRejected(t *testing.T) {
 	Initialize("plain-key")
 	if _, err := GetCredits(); err != nil || fake.size() != 1 {
 		t.Fatalf("plain key: %v, %d requests", err, fake.size())
+	}
+	if warmup, err := NewWarmupClient("plain-key", ""); err != nil || warmup == nil {
+		t.Fatalf("plain Warmup key: %v", err)
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -73,17 +72,22 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 	if response_http.StatusCode < 200 || response_http.StatusCode > 299 {
 		return ErrorFromResponse(response_http)
 	}
-	if out == nil {
-		return nil
-	}
-	payload, error_ := io.ReadAll(response_http.Body)
+	payload, error_ := readLimitedBody(response_http.Body)
 	if error_ != nil {
 		return error_
 	}
+	// An empty 2xx (a 204 from DELETE) is a success with nothing to decode.
 	if len(strings.TrimSpace(string(payload))) == 0 {
 		return nil
 	}
-	return json.Unmarshal(payload, out)
+	// The same checks as every other call: {"success": false} and an
+	// error-only body on a 2xx are a *ZBApiError, and an HTML page or other
+	// non-JSON text is a short error rather than a JSON parse error.
+	contentType := response_http.Header.Get("Content-Type")
+	if out == nil {
+		return ensureJSONAPIBody(response_http.StatusCode, contentType, payload)
+	}
+	return decodeJSONBody(response_http.StatusCode, contentType, payload, out)
 }
 
 // GetInboxPlacementProviders - seed providers available for new tests
