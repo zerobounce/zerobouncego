@@ -78,6 +78,16 @@ func TestLiveValidationFree(t *testing.T) {
 	requireValidationKey(t)
 	before := liveCredits(t)
 
+	t.Run("GetCredits returns a positive balance", func(t *testing.T) {
+		// LIVE: -1 is the API's answer for an INVALID key, not a balance.
+		// liveCredits only fails on a transport error, so without this the
+		// balance was read and never looked at, and a dead key produced a wall
+		// of downstream failures with nothing pointing at the key.
+		if before <= 0 {
+			t.Fatalf("not a usable credit balance: %d", before)
+		}
+	})
+
 	t.Run("GetApiUsage", func(t *testing.T) {
 		end := time.Now()
 		start := end.AddDate(0, 0, -7)
