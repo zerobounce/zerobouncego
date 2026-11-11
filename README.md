@@ -5,12 +5,18 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 ## Security
 
 - Keep API keys on a trusted server. Do not embed them in mobile apps or browser JavaScript that untrusted users can inspect.
-- Custom API base URLs (when supported) must use `https://`. Do not pass end-user-controlled hosts into those settings.
+- Every request must go to an `https://` URL, whichever way its base URL was set (`SetURI`, the `URI`, `BULK_URI`, `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI` variables, their `ZERO_BOUNCE_*_URI` environment variables, a `Client`'s `URI` and `BulkURI`, or the Warmup client's base URL). Any other URL is refused before the request is sent; plain `http://` is allowed only to `127.0.0.1`, `localhost` and `[::1]`, for local tests. Do not pass end-user-controlled hosts into those settings.
+- API keys with surrounding whitespace or control characters are rejected before a request is sent. `Client` and `WarmupClient` print their key as `***` with every `fmt` verb.
 - Request URLs include `api_key` as a query parameter (ZeroBounce API contract). Do not log full request URLs or enable payload debug logging in production.
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)
 
 **Version and tagging:** Version is set in `version.go` and kept in sync with git tags. The SDKs monorepo scripts (`tag-version.sh`, `check-untagged-bump-and-push.sh`, `commit-and-tag-version.sh`) read and update it when creating or bumping releases. pkg.go.dev indexes the module from GitHub tags automatically. For **v2 and later**, the Go module path must include `/v2` ([semantic import versioning](https://go.dev/ref/mod#major-version-suffixes)); v1.x uses `github.com/zerobounce/zerobouncego` without the suffix.
+
+## Requirements
+
+- Go 1.21 or later.
+- Module path `github.com/zerobounce/zerobouncego/v2` (v2 and later carry the `/v2` suffix).
 
 ## Installation and Usage
 ```sh
@@ -49,7 +55,8 @@ Call the setter function (passing empty strings will keep current values):
 new_uri := "https://mock.example.com/v2/" // your mock or other API host
 new_bulk_uri := ""                         // "" keeps the current bulk URI
 if err := zerobouncego.SetURI(new_uri, new_bulk_uri); err != nil {
-    // Both must be https:// URLs. Nothing is applied when either is rejected,
+    // Both must be https:// URLs (http:// only to 127.0.0.1, localhost or
+    // [::1], for local tests). Nothing is applied when either is rejected,
     // so a typo cannot leave you quietly pointed at the old host.
     log.Fatal(err)
 }

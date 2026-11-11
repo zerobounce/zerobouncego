@@ -20,7 +20,9 @@ const maxJSONBodyBytes = 2 << 20
 //     (3xx) included, whatever the body;
 //   - for a 2xx whose JSON body reports a failure ({"success": false, ...}, or
 //     an error-only body such as {"error": "Invalid API key ..."}), with
-//     StatusCode set to that 2xx status.
+//     StatusCode set to that 2xx status. That includes a JSON body from a
+//     file download (getfile) and ValidateBatch's account-level error (an
+//     error for address "all").
 //
 // A 2xx that is not an API response at all (an HTML page, an empty body,
 // non-JSON text) is a plain error there. The Warmup client returns a
@@ -73,7 +75,20 @@ func (c RequestConfig) requireKey() error {
 	if strings.TrimSpace(c.APIKey) == "" {
 		return errors.New("api_key is required: call Initialize or New with a non-empty api_key")
 	}
+	if !validKeyText(c.APIKey) {
+		return errors.New("invalid parameter: api_key has surrounding whitespace or control characters")
+	}
 	return nil
+}
+
+// validKeyText reports whether a key has no surrounding whitespace and no
+// control characters. Such a key would be quoted, unredacted, in the HTTP
+// library's own error.
+func validKeyText(key string) bool {
+	if key != strings.TrimSpace(key) {
+		return false
+	}
+	return !strings.ContainsFunc(key, func(r rune) bool { return r < 32 || r == 127 })
 }
 
 func readLimitedBody(reader io.Reader) ([]byte, error) {
@@ -326,7 +341,12 @@ func getFileBodyError(status int, contentType, body string) error {
 	if shouldTreatGetFileBodyAsError(body, contentType) {
 		message := stripErrorPrefix(strings.TrimSpace(FormatGetFileErrorMessage(strings.TrimSpace(body))))
 		if message == "" || len(message) > 500 || bodyLooksLikeHTML(message) {
-			return errors.New(messageFromBody(status, contentType, body))
+			message = messageFromBody(status, contentType, body)
+		}
+		// A JSON error body is the API reporting a failure, so it carries the
+		// status like any other; text that is not JSON stays a plain error.
+		if json.Valid([]byte(strings.TrimSpace(body))) {
+			return &ZBApiError{StatusCode: status, Message: message}
 		}
 		return errors.New(message)
 	}

@@ -16,15 +16,26 @@ const (
 	redirectRefused     = "ZeroBounce returned a redirect, which this client does not follow."
 )
 
+// redirectTarget is where every 3xx points. A request that reaches it means
+// the redirect was followed.
+const redirectTarget = "evil.example"
+
+// errRedirectFollowed stops a client that follows redirects at the first hop,
+// so the test fails at once instead of looping on the same 3xx.
+var errRedirectFollowed = errors.New("the redirect was followed to " + redirectTarget)
+
 // statusResponder answers every request with one status, content type and body.
 func statusResponder(status int, contentType, body string) httpmock.Responder {
 	return func(req *http.Request) (*http.Response, error) {
+		if req.URL.Hostname() == redirectTarget {
+			return nil, errRedirectFollowed
+		}
 		response := httpmock.NewStringResponse(status, body)
 		if contentType != "" {
 			response.Header.Set("Content-Type", contentType)
 		}
 		if status >= 300 && status < 400 {
-			response.Header.Set("Location", "https://evil.example/collect")
+			response.Header.Set("Location", "https://"+redirectTarget+"/collect")
 		}
 		response.Request = req
 		return response, nil
@@ -172,5 +183,55 @@ func TestRedirectIsReportedAsRefused(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// A getfile JSON error body on an HTTP 200 (a file that is not ready, an
+// unknown file id) is an API failure, so it carries the status like any other.
+func TestGetFileJSONErrorOn200IsZBApiError(t *testing.T) {
+	calls := map[string]func(io.Writer) error{
+		"BulkValidationResult":   func(w io.Writer) error { return BulkValidationResult(testing_file_id, w) },
+		"AiScoringResult":        func(w io.Writer) error { return AiScoringResult(testing_file_id, w) },
+		"BulkEmailFinderResult":  func(w io.Writer) error { return BulkEmailFinderResult(testing_file_id, w) },
+		"BulkDomainSearchResult": func(w io.Writer) error { return BulkDomainSearchResult(testing_file_id, w) },
+	}
+	bodies := []struct{ contentType, body, message string }{
+		{"application/json", `{"success": false, "message": "File is not ready."}`, "File is not ready."},
+		{"application/octet-stream", `{"success": "False", "message": "File not found."}`, "File not found."},
+		{"application/json", `{"error": "Invalid file id"}`, "Invalid file id"},
+	}
+	for name, call := range calls {
+		for _, body := range bodies {
+			t.Run(name, func(t *testing.T) {
+				withStatusResponder(t, 200, body.contentType, body.body)
+				var saved bytes.Buffer
+				err := call(&saved)
+				var apiErr *ZBApiError
+				if !errors.As(err, &apiErr) {
+					t.Fatalf("%T is not a *ZBApiError: %v", err, err)
+				}
+				if apiErr.StatusCode != 200 || apiErr.Message != body.message {
+					t.Fatalf("got %+v", apiErr)
+				}
+				if saved.Len() != 0 {
+					t.Fatal("the error body was saved as the result file")
+				}
+			})
+		}
+	}
+}
+
+// The account-level batch failure (HTTP 200, an error for address "all") is
+// an API failure as well, not a plain error.
+func TestBatchAccountLevelErrorIsZBApiError(t *testing.T) {
+	withStatusResponder(t, 200, "application/json",
+		`{"email_batch": [], "errors": [{"email_address": "all", "error": "Invalid API Key or your account ran out of credits"}]}`)
+	_, err := ValidateBatch([]EmailToValidate{{EmailAddress: "a@example.com"}})
+	var apiErr *ZBApiError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("%T is not a *ZBApiError: %v", err, err)
+	}
+	if apiErr.StatusCode != 200 || apiErr.Message != "Invalid API Key or your account ran out of credits" {
+		t.Fatalf("got %+v", apiErr)
 	}
 }

@@ -53,9 +53,7 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 	}
 	// A key with surrounding whitespace or control characters would be quoted,
 	// unredacted, in the HTTP library's own error.
-	if apiKey != strings.TrimSpace(apiKey) || strings.ContainsFunc(apiKey, func(r rune) bool {
-		return r < 32 || r == 127
-	}) {
+	if !validKeyText(apiKey) {
 		return nil, fmt.Errorf("invalid parameter: api_key has surrounding whitespace or control characters")
 	}
 	base := baseURL
@@ -70,6 +68,19 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 		root:   strings.TrimRight(base, "/") + warmupBasePath,
 		client: timedHTTPClient(),
 	}, nil
+}
+
+// String names the type and its base URL, with the API key redacted.
+func (c WarmupClient) String() string {
+	return fmt.Sprintf("WarmupClient{apiKey:%q, root:%q}", redactedKey(c.apiKey), c.root)
+}
+
+// GoString is String in Go syntax (%#v), with the API key redacted.
+func (c WarmupClient) GoString() string { return "zerobouncego." + c.String() }
+
+// Format keeps the API key out of every fmt verb.
+func (c WarmupClient) Format(state fmt.State, verb rune) {
+	formatRedacted(state, verb, c.String(), c.GoString())
 }
 
 // redact removes every form of a secret from a message.
@@ -91,9 +102,7 @@ func (c *WarmupClient) send(method, path string, params url.Values, body interfa
 	if params != nil && len(params) > 0 {
 		requestURL = fmt.Sprintf("%s?%s", requestURL, params.Encode())
 	}
-	if !strings.HasPrefix(strings.ToLower(requestURL), "https://") {
-		return 0, nil, nil, fmt.Errorf("refusing to send the API key to a URL that is not https://")
-	}
+	// The scheme is checked by the client's transport, as for every request.
 
 	var reader io.Reader
 	if body != nil {
