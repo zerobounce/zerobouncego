@@ -319,8 +319,8 @@ func strPtr(value string) *string {
 }
 
 func TestOfflineVersionMatchesPackage(t *testing.T) {
-	if Version != "3.0.0" {
-		t.Fatalf("Version = %s, want 3.0.0", Version)
+	if Version != "3.0.1" {
+		t.Fatalf("Version = %s, want 3.0.1", Version)
 	}
 }
 

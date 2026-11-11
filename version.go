@@ -1,4 +1,4 @@
 package zerobouncego
 
 // Version is the current SDK version (semver). It is updated by the release scripts.
-const Version = "3.0.0"
+const Version = "3.0.1"
