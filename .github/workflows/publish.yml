@@ -93,6 +93,9 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27"
+          # No module/build cache in the release job: a cache restored here could have been
+          # written by any branch's workflow, so the release build starts from a clean slate.
+          cache: false
 
       - name: Run tests
         run: go test ./... -cover -short -v
