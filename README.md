@@ -16,11 +16,11 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 ## Requirements
 
 - Go 1.21 or later.
-- Module path `github.com/zerobounce/zerobouncego/v2` (v2 and later carry the `/v2` suffix).
+- Module path `github.com/zerobounce/zerobouncego/v3` (v2 and later carry the `/v2` suffix).
 
 ## Installation and Usage
 ```sh
-go get github.com/zerobounce/zerobouncego/v2
+go get github.com/zerobounce/zerobouncego/v3
 ```
 
 This package uses the zero-bounce API which requires an API key. This key can be provided in three ways:
@@ -79,7 +79,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -116,7 +116,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -160,7 +160,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -205,7 +205,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -250,7 +250,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -275,7 +275,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -305,7 +305,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -369,7 +369,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 
@@ -480,7 +480,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 
@@ -595,7 +595,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -811,7 +811,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -879,7 +879,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -902,7 +902,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -957,7 +957,7 @@ variables it reads and which calls spend credits.
 1. Bump `Version` in `version.go` (keep `go.mod` module path aligned with the tag major), commit, tag (`vX.Y.Z`), push tag.
 2. **Actions → Publish → Run workflow** with that tag.
 
-Registry: [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego/v2) (indexed automatically from the Git tag)
+Registry: [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego/v3) (indexed automatically from the Git tag)
 
 ## License
 

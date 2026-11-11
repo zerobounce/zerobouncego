@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Project
 
-`zerobouncego` is the ZeroBounce Go SDK. Callers set a process-wide API key with `Initialize` and call package functions, or they construct a `Client` with `New` when each user needs a separate key. The module path is `github.com/zerobounce/zerobouncego/v2`. Releases are git tags; pkg.go.dev indexes those tags. The Publish workflow creates the GitHub release and checks that proxy.golang.org can see the tag.
+`zerobouncego` is the ZeroBounce Go SDK. Callers set a process-wide API key with `Initialize` and call package functions, or they construct a `Client` with `New` when each user needs a separate key. The module path is `github.com/zerobounce/zerobouncego/v3`. Releases are git tags; pkg.go.dev indexes those tags. The Publish workflow creates the GitHub release and checks that proxy.golang.org can see the tag.
 
 ## Layout
 
@@ -57,9 +57,9 @@ CI (`.github/workflows/sdk_ci.yml`) runs `go test ./... -cover -short -v` on Go 
 Publishing and pushing tags need a maintainer's explicit approval. Do not bump the version, tag, or publish unless they asked.
 
 1. Move `[Unreleased]` entries under `## [x.y.z] - YYYY-MM-DD`, leave an empty `[Unreleased]` section, and update the compare links at the bottom of `CHANGELOG.md`.
-2. Set the same version in `Version` in `version.go`. The publish workflow fails if it differs from the tag. Do not edit `go.mod` for a version bump. The module line must stay `github.com/zerobounce/zerobouncego/v2` for every 2.y.z tag.
+2. Set the same version in `Version` in `version.go`. The publish workflow fails if it differs from the tag. Do not edit `go.mod` for a version bump. The module line must stay `github.com/zerobounce/zerobouncego/v3` for every 3.y.z tag.
 3. `go test -short -count=1 .`
-4. Tag `vx.y.z` on that commit and run the Publish workflow with that tag. It creates the GitHub release. proxy.golang.org indexes the tag; the workflow waits until `https://proxy.golang.org/github.com/zerobounce/zerobouncego/v2/@v/vx.y.z.info` returns 200.
+4. Tag `vx.y.z` on that commit and run the Publish workflow with that tag. It creates the GitHub release. proxy.golang.org indexes the tag; the workflow waits until `https://proxy.golang.org/github.com/zerobounce/zerobouncego/v3/@v/vx.y.z.info` returns 200.
 
 - **Four base URLs.** `URI`, `BULK_URI` (ends in `/v2/`), plus `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI`. The last two are separate values rather than paths built from `BULK_URI`; `SetURI` rebases them onto the bulk host it is given unless `ZERO_BOUNCE_LIST_EVALUATOR_URI` / `ZERO_BOUNCE_INBOX_PLACEMENT_URI` set them. `SetURI` returns an `error` rather than swallowing a non-https value, and applies nothing when either argument is rejected. `Initialize` resets `URI` to `ZERO_BOUNCE_URI` when it is set, otherwise to the production default. The S3/SFTP jobs use `bulkAPIRoot()`, which strips the `/v2`.
 - **Two bulk shapes are easy to get wrong.** `ValidateSFTPFile`'s `FileName` is optional — leaving it empty uses the input bucket from the account's settings, and every other job requires it. `ExportSFTPFile` sends `export_path`, not the `export_bucket` that `ExportS3File` sends. Both export fields are optional and fall back to the account's settings.

@@ -1,9 +1,10 @@
 // Module path and semver tags must stay aligned (Go semantic import versioning):
 //   - v0.x / v1.x → module github.com/zerobounce/zerobouncego (no /v2)
-//   - v2.x+       → module github.com/zerobounce/zerobouncego/v2  (this file)
+//   - v2.x        → module github.com/zerobounce/zerobouncego/v2
+//   - v3.x+       → module github.com/zerobounce/zerobouncego/v3  (this file)
 // If you tag v2.0.0 or higher while the module line omits /v2, proxy.golang.org
 // will not serve that version (404). See README § Publish.
-module github.com/zerobounce/zerobouncego/v2
+module github.com/zerobounce/zerobouncego/v3
 
 go 1.21
 

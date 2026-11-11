@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] - 2026-11-12
+
+### Upgrading from 2.x
+
+- **The module path is now `github.com/zerobounce/zerobouncego/v3`** (Go semantic import versioning: a new major needs a new path). Change your imports and run `go get github.com/zerobounce/zerobouncego/v3@v3.0.0`; `go get -u` on `/v2` stays on the 2.x line. The rest of this section lists the behaviour changes.
 
 ### Breaking
 
@@ -173,7 +177,8 @@ Details for each are under Added, Changed and Fixed below.
 
 - Initial release: `GetCredits`, `GetApiUsage`, `Validate`, `ValidateBatch`, bulk validation and AI scoring file methods, and `GetActivityData`.
 
-[Unreleased]: https://github.com/zerobounce/zerobouncego/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/zerobounce/zerobouncego/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/zerobounce/zerobouncego/compare/v2.2.0...v3.0.0
 [2.2.0]: https://github.com/zerobounce/zerobouncego/compare/v2.1.4...v2.2.0
 [2.1.3]: https://github.com/zerobounce/zerobouncego/compare/v2.1.1...v2.1.3
 [2.1.1]: https://github.com/zerobounce/zerobouncego/compare/v2.1.0...v2.1.1

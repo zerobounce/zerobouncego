@@ -1,6 +1,6 @@
 #### Installation and Usage
 ```sh
-go get github.com/zerobounce/zerobouncego/v2
+go get github.com/zerobounce/zerobouncego/v3
 ```
 
 This package uses the zero-bounce API which requires an API key. This key can be provided in three ways:
@@ -29,7 +29,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -66,7 +66,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -110,7 +110,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -155,7 +155,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -200,7 +200,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -225,7 +225,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -255,7 +255,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -303,7 +303,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 
@@ -414,7 +414,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 
@@ -530,7 +530,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {
@@ -746,7 +746,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerobounce/zerobouncego/v2"
+	"github.com/zerobounce/zerobouncego/v3"
 )
 
 func main() {

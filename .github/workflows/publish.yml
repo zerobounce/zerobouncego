@@ -138,7 +138,7 @@ jobs:
           TAG: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
-          URL="https://proxy.golang.org/github.com/zerobounce/zerobouncego/v2/@v/${TAG}.info"
+          URL="https://proxy.golang.org/github.com/zerobounce/zerobouncego/v3/@v/${TAG}.info"
           echo "Checking $URL"
           for i in $(seq 1 20); do
             CODE=$(curl -sS -o /dev/null -w '%{http_code}' "$URL" || true)
@@ -151,5 +151,5 @@ jobs:
           done
           echo "Warning: proxy did not return 200 for $TAG within 5 minutes."
           echo "pkg.go.dev may still index shortly; verify manually:"
-          echo "  go get github.com/zerobounce/zerobouncego/v2@${TAG#v}"
+          echo "  go get github.com/zerobounce/zerobouncego/v3@${TAG#v}"
           exit 1
