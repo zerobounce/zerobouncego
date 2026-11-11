@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jarcoal/httpmock"
 	"github.com/joho/godotenv"
 )
 
@@ -161,6 +160,28 @@ func SetApiKey(new_api_key_value string) {
 	API_KEY = new_api_key_value
 }
 
+// errPlainHTTP refuses a request URL that is not https:// (or http:// to a
+// loopback host, for tests).
+var errPlainHTTP = errors.New("refusing to send the API key to a URL that is not https:// (http:// is allowed only for 127.0.0.1, localhost and [::1])")
+
+// checkRequestURL accepts https:// and, for tests, http:// to 127.0.0.1,
+// localhost or [::1].
+func checkRequestURL(parsed *url.URL) error {
+	if parsed == nil {
+		return errPlainHTTP
+	}
+	if strings.EqualFold(parsed.Scheme, "https") {
+		return nil
+	}
+	if strings.EqualFold(parsed.Scheme, "http") {
+		switch strings.ToLower(parsed.Hostname()) {
+		case "127.0.0.1", "localhost", "::1":
+			return nil
+		}
+	}
+	return errPlainHTTP
+}
+
 func requireHTTPS(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
@@ -169,7 +190,7 @@ func requireHTTPS(raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !strings.EqualFold(parsed.Scheme, "https") {
+	if checkRequestURL(parsed) != nil {
 		return "", fmt.Errorf("URI must be an https:// URL")
 	}
 	return raw, nil
@@ -273,11 +294,36 @@ func ErrorFromResponse(response *http.Response) error {
 	return statusError(response.StatusCode, messageFromBody(response.StatusCode, response.Header.Get("Content-Type"), string(responseBody)))
 }
 
+// httpsOnlyTransport checks every request URL before it is sent, whichever
+// base URL it was built from: URI, BULK_URI, LIST_EVALUATOR_URI,
+// INBOX_PLACEMENT_URI (set directly or through ZERO_BOUNCE_*_URI), a
+// Client's URI and BulkURI, or the Warmup client's base.
+type httpsOnlyTransport struct {
+	base http.RoundTripper
+}
+
+func (t httpsOnlyTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if err := checkRequestURL(request.URL); err != nil {
+		if request.Body != nil {
+			request.Body.Close()
+		}
+		return nil, err
+	}
+	base := t.base
+	if base == nil {
+		// Looked up per request, so a transport installed later (a test
+		// fake, httpmock) is the one used.
+		base = http.DefaultTransport
+	}
+	return base.RoundTrip(request)
+}
+
 func timedHTTPClient() *http.Client {
 	c := *http.DefaultClient
 	if c.Timeout == 0 {
 		c.Timeout = httpTimeout
 	}
+	c.Transport = httpsOnlyTransport{base: c.Transport}
 	// A 3xx must not be followed. The API key is in the query string, and a
 	// redirect could send it to another host.
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -371,110 +417,4 @@ func doPostFormRequest(cfg RequestConfig, endpoint string, form url.Values, obje
 		return err
 	}
 	return decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, object)
-}
-
-// TESTING
-type SingleTest struct {
-	Email     string
-	Status    string
-	SubStatus string
-	FreeEmail bool
-}
-
-var emailsToValidate = []SingleTest{
-	{Email: "disposable@example.com", Status: "do_not_mail", SubStatus: "disposable"},
-	{Email: "invalid@example.com", Status: "invalid", SubStatus: "mailbox_not_found"},
-	{Email: "valid@example.com", Status: "valid", SubStatus: ""},
-	{Email: "toxic@example.com", Status: "do_not_mail", SubStatus: "toxic"},
-	{Email: "donotmail@example.com", Status: "do_not_mail", SubStatus: "role_based"},
-	{Email: "spamtrap@example.com", Status: "spamtrap", SubStatus: ""},
-	{Email: "abuse@example.com", Status: "abuse", SubStatus: ""},
-	{Email: "catch_all@example.com", Status: "catch-all", SubStatus: ""},
-	{Email: "antispam_system@example.com", Status: "unknown", SubStatus: "antispam_system"},
-	{Email: "does_not_accept_mail@example.com", Status: "invalid", SubStatus: "does_not_accept_mail"},
-	{Email: "exception_occurred@example.com", Status: "unknown", SubStatus: "exception_occurred"},
-	{Email: "failed_smtp_connection@example.com", Status: "unknown", SubStatus: "failed_smtp_connection"},
-	{Email: "failed_syntax_check@example.com", Status: "invalid", SubStatus: "failed_syntax_check"},
-	{Email: "forcible_disconnect@example.com", Status: "unknown", SubStatus: "forcible_disconnect"},
-	{Email: "global_suppression@example.com", Status: "do_not_mail", SubStatus: "global_suppression"},
-	{Email: "greylisted@example.com", Status: "unknown", SubStatus: "greylisted"},
-	{Email: "leading_period_removed@example.com", Status: "valid", SubStatus: "leading_period_removed"},
-	{Email: "mail_server_did_not_respond@example.com", Status: "unknown", SubStatus: "mail_server_did_not_respond"},
-	{Email: "mail_server_temporary_error@example.com", Status: "unknown", SubStatus: "mail_server_temporary_error"},
-	{Email: "unknown@example.com", Status: "unknown", SubStatus: "mail_server_temporary_error"},
-	{Email: "mailbox_quota_exceeded@example.com", Status: "invalid", SubStatus: "mailbox_quota_exceeded"},
-	{Email: "mailbox_not_found@example.com", Status: "invalid", SubStatus: "mailbox_not_found"},
-	{Email: "no_dns_entries@example.com", Status: "invalid", SubStatus: "no_dns_entries"},
-	{Email: "possible_trap@example.com", Status: "do_not_mail", SubStatus: "possible_trap"},
-	{Email: "possible_typo@example.com", Status: "invalid", SubStatus: "possible_typo"},
-	{Email: "role_based@example.com", Status: "do_not_mail", SubStatus: "role_based"},
-	{Email: "timeout_exceeded@example.com", Status: "unknown", SubStatus: "timeout_exceeded"},
-	{Email: "unroutable_ip_address@example.com", Status: "invalid", SubStatus: "unroutable_ip_address"},
-	{Email: "free_email@example.com", Status: "valid", SubStatus: "", FreeEmail: true},
-	{Email: "gold@example.com", Status: "valid", SubStatus: "gold"},
-	{Email: "role_based_accept_all@example.com", Status: "valid", SubStatus: "role_based_accept_all"},
-	{Email: "role_based_catch_all@example.com", Status: "do_not_mail", SubStatus: "role_based_catch_all"},
-}
-
-// variables used for file-related unit tests
-const (
-	sample_date_time     = "2023-01-12T13:00:00Z"
-	sample_file_contents = "valid@example.com\ninvalid@example.com\ntoxic@example.com\n"
-	sample_error_message = "error message"
-	sample_error_400     = `{
-		"error": "` + sample_error_message + `"
-	}`
-	file_name_400          = "filename_400.csv"
-	send_file_response_400 = `{
-		"success": false,
-		"error_message": "` + sample_error_message + `",
-		"message": "` + sample_error_message + `"
-	}`
-	file_name_200          = "filename_200.csv"
-	testing_file_id        = "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
-	send_file_response_200 = `
-	{
-		"success": true,
-		"message": "File Accepted",
-		"file_name": "` + file_name_200 + `",
-		"file_id": "` + testing_file_id + `"
-	}`
-)
-
-// mockErrorResponse - mock http library to return error for given endpoint
-func mockErrorResponse(method, endpoint string) {
-	httpmock.RegisterResponder(
-		method,
-		`=~^(.*)`+endpoint+`(.*)\z`,
-		func(r *http.Request) (*http.Response, error) { return nil, errors.New(sample_error_message) },
-	)
-}
-
-// mockBadRequestResponse - mock http library to return 400 response for given endpoint
-func mockBadRequestResponse(method, endpoint string) {
-	httpmock.RegisterResponder(
-		method,
-		`=~^(.*)`+endpoint+`(.*)\z`,
-		httpmock.NewStringResponder(400, sample_error_400),
-	)
-}
-
-// mockBadRequestResponse - mock http library to return 200Ok response for given endpoint
-// returning given endpoint
-func mockOkResponse(method, endpoint, content string) {
-	httpmock.RegisterResponder(
-		method,
-		`=~^(.*)`+endpoint+`(.*)\z`,
-		httpmock.NewStringResponder(200, content),
-	)
-}
-
-// testingCsvFileOk - sample csv file, used in testing
-func testingCsvFileOk() CsvFile {
-	return CsvFile{
-		File:               strings.NewReader(sample_file_contents),
-		FileName:           file_name_200,
-		HasHeaderRow:       true,
-		EmailAddressColumn: 1,
-	}
 }

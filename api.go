@@ -208,7 +208,9 @@ func validateWithOptions(cfg RequestConfig, email string, opts ValidateOptions) 
 
 	params := url.Values{}
 	params.Set("email", email)
-	params.Set("ip_address", opts.IPAddress)
+	if opts.IPAddress != "" {
+		params.Set("ip_address", opts.IPAddress)
+	}
 	if opts.Timeout != "" {
 		params.Set("timeout", opts.Timeout)
 	}

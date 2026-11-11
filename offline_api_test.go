@@ -1143,6 +1143,11 @@ type redirectTransport struct {
 func (r *redirectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	r.calls++
 	r.hosts = append(r.hosts, req.URL.Host)
+	// Stop a client that follows redirects at the first hop instead of
+	// answering it with the same 302 for ever.
+	if req.URL.Hostname() == "evil.example" {
+		return nil, errRedirectFollowed
+	}
 	header := make(http.Header)
 	header.Set("Location", "https://evil.example/collect")
 	return &http.Response{

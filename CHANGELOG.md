@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Every request now refuses a URL that is not `https://` before anything is sent; the error contains `refusing to send the API key to a URL that is not https:// (http:// is allowed only for 127.0.0.1, localhost and [::1])`. In v2.2.0 only `SetURI` and the Warmup client checked: a base URL set through the `URI`, `BULK_URI`, `LIST_EVALUATOR_URI` or `INBOX_PLACEMENT_URI` variables, the `ZERO_BOUNCE_URI`, `ZERO_BOUNCE_BULK_URI`, `ZERO_BOUNCE_LIST_EVALUATOR_URI` or `ZERO_BOUNCE_INBOX_PLACEMENT_URI` environment variables, or a `Client`'s `URI` and `BulkURI` sent the API key over plain `http://` to any host. `SetURI` now also accepts `http://` to those loopback hosts. Upgrading: a test pointed at a plain-`http://` mock on another host must move it to `https://` or to a loopback address.
+- An API key with surrounding whitespace or control characters is rejected before a request is sent, with `invalid parameter: api_key has surrounding whitespace or control characters`, as `NewWarmupClient` already did for the Warmup key. This covers `Initialize`, `InitializeWithURI`, `SetApiKey`, the environment variables and `New`. Upgrading: trim a key read from a file (a trailing newline is the usual cause).
+- `MOCK_VALIDATE_RESPONSE` and `SingleTest` are no longer exported. They were the package's own test fixtures and now live in `_test.go` files, so `github.com/jarcoal/httpmock` is no longer compiled into programs that import this module. Upgrading: copy them into your own tests if you used them.
+
+### Changed
+
+- A file download (`BulkValidationResult`, `AiScoringResult`, `GenericResultFetch` and their `WithOptions` forms, `BulkEmailFinderResult`, `BulkDomainSearchResult`) that gets a JSON error body on an HTTP 200, and `ValidateBatch`'s account-level error (HTTP 200, an error for address `all`), now return a `*ZBApiError` with `StatusCode` 200 instead of a plain error, like every other JSON failure on a 2xx. The message text is unchanged.
+
+### Fixed
+
+- `Validate`, `ValidateWithTimeout`, `ValidateWithOptions` and `Client.Validate` no longer send an empty `ip_address` parameter when no IP address is given.
+
+### Security
+
+- `Client`, `WarmupClient` and `RequestConfig` print the API key as `***` with every `fmt` verb. `%v`, `%+v` and `%#v` printed the key in v2.2.0.
+
 ## [2.2.0] - 2026-11-11
+
+### Breaking
+
+Upgrading from 2.1.4:
+
+- Go 1.21 or later is required. `go.mod` declares `go 1.21` (it said `go 1.16`); on Go 1.20 the build fails with `undefined: strings.ContainsFunc`. The import path is unchanged: `github.com/zerobounce/zerobouncego/v2`.
+- API requests time out after 120 seconds, reading the response included, so a slow bulk results download now fails with a timeout error. Set a non-zero `http.DefaultClient.Timeout` before the call (and before `NewWarmupClient`) to allow longer.
+- `SetURI` returns an `error` and applies nothing when either argument is rejected. Check it; a call used as a statement still compiles but keeps reaching the old host.
+- An invalid or drained API key returns an error carrying the API's message instead of an empty result (`GetCredits` still returns `-1`).
+- A response with an HTTP status above 299, a 3xx included (redirects are not followed), returns a `*ZBApiError`; match it with `errors.As`.
+- `ValidateBatch` returns an error for an account-level failure (an error for address `all`).
+- `ErrorFromResponse` and `DoGetRequest` return a short message instead of the raw body, and `DoGetRequest` treats more 2xx bodies as errors.
+- An empty API key, a nil upload, and a timeout outside the API range are rejected before a request is sent.
+- `Initialize` resets the base URL to `ZERO_BOUNCE_URI` when that is set.
+
+Details for each are under Added, Changed and Fixed below.
 
 ### Added
 
