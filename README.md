@@ -952,3 +952,6 @@ variables it reads and which calls spend credits.
 
 Registry: [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego/v2) (indexed automatically from the Git tag)
 
+## License
+
+MIT. See [LICENSE](LICENSE).
