@@ -52,9 +52,9 @@ Go modules are **not** published to a package registry. A release is a **git tag
 **Critical rule:** the **`module` line in `go.mod` must match the major version of the tag**:
 
 - **`v2.x.x` tags** require `module github.com/zerobounce/zerobouncego/v2`; **`v3.x.x` tags** require `module github.com/zerobounce/zerobouncego/v3`.
-- **`v1.x.x` tags** use `module github.com/zerobounce/zerobouncego` (no `/v2`).
+- **`v1.x.x` tags** use `module github.com/zerobounce/zerobouncego` (no suffix).
 
-If you tag **v2+** without the **`/v2`** module path, the proxy will **not** serve that version (users see 404 / missing versions). See the **Publish** section in [README.md](README.md).
+If you tag **v2+** without the matching suffix on the module path (**`/v2`** for v2.x, **`/v3`** for v3.x), the proxy will **not** serve that version (users see 404 / missing versions). See the **Publish** section in [README.md](README.md).
 
 ## Questions
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The Inbox Placement Tester calls (`GetInboxPlacementProviders`, `GetInboxPlacementTestTypes`, `CreateInboxPlacementTest`, `GetInboxPlacementTest`, `ListInboxPlacementTests`, `DeleteInboxPlacementTest`, `GetInboxPlacementWebhook`, `SetInboxPlacementWebhook`) now check an HTTP 2xx body like every other call. In 2.2.0 and 3.0.0 an error-only body (`{"error": "Invalid API key"}`) or `{"success": false, ...}` came back as the result with a nil error; it is now a `*ZBApiError` with `StatusCode` 200 and the API's message. An HTML page or other non-JSON text on a 2xx was returned as the raw `encoding/json` error (`invalid character '<' looking for beginning of value`); it is now a plain error with the same short message as the other calls (`ZeroBounce returned an HTML error page ("<title>") instead of an API response.`). `DeleteInboxPlacementTest` now reads its response body too; an empty 2xx is still a success.
+
 ## [3.0.0] - 2026-11-12
 
 ### Upgrading from 2.x

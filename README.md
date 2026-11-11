@@ -11,12 +11,12 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)
 
-**Version and tagging:** Version is set in `version.go` and kept in sync with git tags. The SDKs monorepo scripts (`tag-version.sh`, `check-untagged-bump-and-push.sh`, `commit-and-tag-version.sh`) read and update it when creating or bumping releases. pkg.go.dev indexes the module from GitHub tags automatically. For **v2 and later**, the Go module path must include `/v2` ([semantic import versioning](https://go.dev/ref/mod#major-version-suffixes)); v1.x uses `github.com/zerobounce/zerobouncego` without the suffix.
+**Version and tagging:** Version is set in `version.go` and kept in sync with git tags. The SDKs monorepo scripts (`tag-version.sh`, `check-untagged-bump-and-push.sh`, `commit-and-tag-version.sh`) read and update it when creating or bumping releases. pkg.go.dev indexes the module from GitHub tags automatically. From **v2** on, the Go module path ends in the major version ([semantic import versioning](https://go.dev/ref/mod#major-version-suffixes)): v2.x is `github.com/zerobounce/zerobouncego/v2`, v3.x is `github.com/zerobounce/zerobouncego/v3`; v1.x uses `github.com/zerobounce/zerobouncego` without a suffix.
 
 ## Requirements
 
 - Go 1.21 or later.
-- Module path `github.com/zerobounce/zerobouncego/v3` (v2 and later carry the `/v2` suffix).
+- Module path `github.com/zerobounce/zerobouncego/v3` (each major version from v2 on carries its own suffix: `/v2` for v2.x, `/v3` for v3.x).
 
 ## Installation and Usage
 ```sh
