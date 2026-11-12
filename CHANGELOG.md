@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - An error built from a response body no longer carries the API key. A body that echoed the key (`{"error": "Invalid API key <key>"}` or `{"success": false, "message": "... <key>"}` on an HTTP 200, a 400 quoting the request URL with `?api_key=<key>`, a JSON error on a 4xx/5xx, a getfile JSON error, `ValidateBatch`'s error for address `all`) was passed on as the error text or `ZBApiError.Message` by every call except the Warmup ones, and by `ErrorFromResponse`. Every key a request has been sent with is now masked as `***` in such a message, as sent, URL-encoded and JSON-escaped, and so is any `api_key=` value. The Warmup client already masked its key and shares the same masking now.
-- Secrets (API keys, and the Warmup SMTP/IMAP credentials) are now also masked in URL encoding with spaces as `%20` as well as `+`, in the HTML-safe JSON escaping `encoding/json` writes (`\u003c`, `\u003e`, `\u0026`), and as the URL encoding of each JSON-escaped form, which is how a server echoes a URL-encoded JSON request body. Longer forms are masked first, so no fragment of a secret is left behind.
+- Secrets (API keys, and the Warmup SMTP/IMAP credentials) are now also masked in URL encoding with spaces as `%20` as well as `+`, in the HTML-safe JSON escaping `encoding/json` writes (`\u003c`, `\u003e`, `\u0026`), as the URL encoding of each JSON-escaped form, which is how a server echoes a URL-encoded JSON request body, and JSON-escaped twice (a JSON error body quoting the JSON request body). Longer forms are masked first, so no fragment of a secret is left behind.
 
 ## [3.0.1] - 2026-11-11
 

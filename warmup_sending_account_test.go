@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // addSendingAccountBody adds a zb_managed account with these maps and returns
@@ -149,5 +150,21 @@ func TestAddSendingAccountChecksWeekdaysOnlyAndTimezone(t *testing.T) {
 	}
 	if _, err := addSendingAccountBody(t, nil, map[string]interface{}{"weekdays_only": true, "timezone": "Europe/Bucharest"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The Warmup client the public constructor builds gives up on a request after
+// exactly 120 seconds, as the main client does; the transport sweep only
+// checks each request's deadline to within a few seconds.
+func TestTheWarmupClientTimesOutAfter120Seconds(t *testing.T) {
+	warmup, err := NewWarmupClient("timeout-key", "https://warmup.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warmup.client == nil {
+		t.Fatal("NewWarmupClient built no HTTP client")
+	}
+	if warmup.client.Timeout != 120*time.Second {
+		t.Fatalf("Warmup client timeout = %v, want 120s", warmup.client.Timeout)
 	}
 }

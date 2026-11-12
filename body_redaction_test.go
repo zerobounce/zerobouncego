@@ -208,3 +208,65 @@ func TestMaskSecretsMasksEveryEncodingOfASecret(t *testing.T) {
 		t.Fatalf("a shorter form was masked inside a longer one: %q", got)
 	}
 }
+
+// Every spelling of a secret, composed here from the encoders themselves, is
+// masked whole: {raw, JSON (HTML-safe and plain, each with / and with \/)} x
+// {as is, URL-encoded with +, with %20}, the path escaping, and each JSON form
+// escaped twice. The secret holds every character an encoding changes, so
+// each spelling differs from the others and dropping any one generator from
+// secretForms fails.
+func TestMaskSecretsMasksEveryComposedSpelling(t *testing.T) {
+	secret := `a b"c/d+e%f&g=h<i>j'k\l`
+	jsonForm := func(htmlSafe, slash bool) func(string) string {
+		return func(text string) string {
+			var out strings.Builder
+			encoder := json.NewEncoder(&out)
+			encoder.SetEscapeHTML(htmlSafe)
+			_ = encoder.Encode(text)
+			quoted := strings.TrimSuffix(out.String(), "\n")
+			escaped := quoted[1 : len(quoted)-1]
+			if slash {
+				escaped = strings.ReplaceAll(escaped, "/", `\/`)
+			}
+			return escaped
+		}
+	}
+	escapers := map[string]func(string) string{
+		"raw":          func(text string) string { return text },
+		"json html":    jsonForm(true, false),
+		"json":         jsonForm(false, false),
+		`json html \/`: jsonForm(true, true),
+		`json \/`:      jsonForm(false, true),
+	}
+	urlEncoders := map[string]func(string) string{
+		"":          func(text string) string { return text },
+		", query +": url.QueryEscape,
+		", query %20": func(text string) string {
+			return strings.ReplaceAll(url.QueryEscape(text), "+", "%20")
+		},
+	}
+	spellings := map[string]string{"path": url.PathEscape(secret)}
+	for escapeName, escape := range escapers {
+		for urlName, encode := range urlEncoders {
+			spellings[escapeName+urlName] = encode(escape(secret))
+		}
+		if escapeName != "raw" {
+			spellings[escapeName+", twice"] = escape(escape(secret))
+		}
+	}
+	if len(spellings) != 1+5*3+4 {
+		t.Fatalf("composed %d spellings", len(spellings))
+	}
+	seen := map[string]string{}
+	for name, text := range spellings {
+		if other, ok := seen[text]; ok {
+			t.Fatalf("%s and %s are the same spelling %q", name, other, text)
+		}
+		seen[text] = name
+	}
+	for name, text := range spellings {
+		if got := maskSecrets("echo ["+text+"] end", secret); got != "echo [***] end" {
+			t.Errorf("maskSecrets left the %s spelling: %q", name, got)
+		}
+	}
+}

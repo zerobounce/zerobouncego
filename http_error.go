@@ -65,12 +65,13 @@ func rememberKey(key string) {
 // holds.
 var apiKeyParameter = regexp.MustCompile(`(?i)(api_key=)[^&\s"'<>]+`)
 
-// maskSecrets replaces every form of each secret in text with ***: as sent,
-// URL-encoded (spaces as + and as %20, and path escaping), JSON-escaped
-// (plain, and HTML-safe the way encoding/json writes &, < and >, each with
-// and without \/ for /), and the URL encoding of each JSON form, which is
-// how a server echoes a URL-encoded JSON request body. Longer forms are
-// replaced first, so a shorter one never leaves part of a longer one behind.
+// maskSecrets replaces every form of each secret in text with ***, composed
+// from the encoders up to depth 2: {as sent, JSON-escaped (plain, and
+// HTML-safe the way encoding/json writes &, < and >, each with and without
+// \/ for /)} x {as is, URL-encoded with spaces as + and as %20}, the path
+// escaping of the secret, and each JSON form escaped twice (a JSON error body
+// quoting the JSON request body). Longer forms are replaced first, so a
+// shorter one never leaves part of a longer one behind.
 func maskSecrets(text string, secrets ...string) string {
 	for _, secret := range secrets {
 		if secret == "" {
@@ -89,22 +90,36 @@ func secretForms(secret string) []string {
 		escaped := url.QueryEscape(value)
 		return []string{escaped, strings.ReplaceAll(escaped, "+", "%20")}
 	}
-	htmlSafe, _ := json.Marshal(secret)
-	var plain bytes.Buffer
-	encoder := json.NewEncoder(&plain)
-	encoder.SetEscapeHTML(false)
-	_ = encoder.Encode(secret)
 	forms := []string{secret, url.PathEscape(secret)}
 	forms = append(forms, queryForms(secret)...)
-	for _, quoted := range []string{string(htmlSafe), strings.TrimSpace(plain.String())} {
-		jsonForm := quoted[1 : len(quoted)-1]
-		for _, escaped := range []string{jsonForm, strings.ReplaceAll(jsonForm, "/", `\/`)} {
-			forms = append(forms, escaped)
-			forms = append(forms, queryForms(escaped)...)
-		}
+	for _, escape := range jsonEscapers {
+		escaped := escape(secret)
+		forms = append(forms, escaped)
+		forms = append(forms, queryForms(escaped)...)
+		// A JSON error body quoting the JSON request body.
+		forms = append(forms, escape(escaped))
 	}
 	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
 	return forms
+}
+
+// jsonEscapers write text as it sits inside a JSON string: HTML-safe (&, <
+// and > as \u0026, \u003c and \u003e, as json.Marshal writes them) or plain,
+// each with / as is or as \/.
+var jsonEscapers = []func(string) string{
+	func(text string) string { return jsonEscaped(text, true) },
+	func(text string) string { return jsonEscaped(text, false) },
+	func(text string) string { return strings.ReplaceAll(jsonEscaped(text, true), "/", `\/`) },
+	func(text string) string { return strings.ReplaceAll(jsonEscaped(text, false), "/", `\/`) },
+}
+
+func jsonEscaped(text string, htmlSafe bool) string {
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(htmlSafe)
+	_ = encoder.Encode(text)
+	quoted := strings.TrimSpace(out.String())
+	return quoted[1 : len(quoted)-1]
 }
 
 // redactKeys masks every API key this process has sent, and any api_key
