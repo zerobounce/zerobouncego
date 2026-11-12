@@ -250,11 +250,11 @@ func jsonUnescaped(text string) string {
 			out.WriteByte('\t')
 		case 'u':
 			if i+5 < len(text) {
-				if code, err := strconv.ParseUint(text[i+2:i+6], 16, 32); err == nil {
+				if code, err := strconv.ParseUint(text[i+2:i+6], 16, 16); err == nil {
 					r := rune(code)
 					// A surrogate pair (\ud83d\ude00) is one character.
 					if utf16.IsSurrogate(r) && i+11 < len(text) && text[i+6] == '\\' && text[i+7] == 'u' {
-						if low, err := strconv.ParseUint(text[i+8:i+12], 16, 32); err == nil {
+						if low, err := strconv.ParseUint(text[i+8:i+12], 16, 16); err == nil {
 							if pair := utf16.DecodeRune(r, rune(low)); pair != unicode.ReplacementChar {
 								out.WriteRune(pair)
 								i += 11
