@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"regexp"
 	"strings"
+	"sync"
 )
 
 const maxJSONBodyBytes = 2 << 20
@@ -41,22 +44,76 @@ func (e *ZBApiError) Error() string { return e.Message }
 // key travels with the request, and a redirect could send it to another host.
 const redirectRefusedMessage = "ZeroBounce returned a redirect, which this client does not follow."
 
+// sentKeys holds every API key a request has been built with: requireKey
+// records each one before it is sent. A message built from a response body
+// is cleaned of all of them, so a server or proxy that echoes the key (an
+// error quoting the request URL, {"error": "Invalid API key <key>"}) does not
+// hand it to the caller. It grows by one entry per distinct key.
+var sentKeys sync.Map
+
+// rememberKey records a key that is about to be sent.
+func rememberKey(key string) {
+	if key != "" {
+		sentKeys.Store(key, struct{}{})
+	}
+}
+
+// apiKeyParameter matches an api_key query or form value, whichever key it
+// holds.
+var apiKeyParameter = regexp.MustCompile(`(?i)(api_key=)[^&\s"'<>]+`)
+
+// maskSecrets replaces every form of each secret in text with ***: as sent,
+// URL-encoded (query and path escaping) and JSON-escaped.
+func maskSecrets(text string, secrets ...string) string {
+	for _, secret := range secrets {
+		if secret == "" {
+			continue
+		}
+		quoted, _ := json.Marshal(secret)
+		jsonForm := string(quoted[1 : len(quoted)-1])
+		for _, form := range []string{
+			secret,
+			url.QueryEscape(secret),
+			url.PathEscape(secret),
+			jsonForm,
+			strings.ReplaceAll(jsonForm, "/", `\/`),
+		} {
+			text = strings.ReplaceAll(text, form, "***")
+		}
+	}
+	return text
+}
+
+// redactKeys masks every API key this process has sent, and any api_key
+// parameter value, in a message built from a response body.
+func redactKeys(message string) string {
+	keys := []string{API_KEY}
+	sentKeys.Range(func(key, _ interface{}) bool {
+		keys = append(keys, key.(string))
+		return true
+	})
+	return apiKeyParameter.ReplaceAllString(maskSecrets(message, keys...), "${1}***")
+}
+
 // statusError is the error for a response that is not a usable API result. An
 // HTTP error status (above 299) becomes a *ZBApiError carrying that status; a
-// 2xx keeps a plain error. The message text is the same either way.
+// 2xx keeps a plain error. The message text is the same either way, with the
+// API key masked (redactKeys).
 func statusError(statusCode int, message string) error {
+	message = redactKeys(message)
 	if statusCode > 299 {
 		return &ZBApiError{StatusCode: statusCode, Message: message}
 	}
 	return errors.New(message)
 }
 
-// apiError builds a ZBApiError, or nil when there is no message.
+// apiError builds a ZBApiError, or nil when there is no message. The API key
+// is masked in the message (redactKeys).
 func apiError(statusCode int, message string) error {
 	if message == "" {
 		return nil
 	}
-	return &ZBApiError{StatusCode: statusCode, Message: message}
+	return &ZBApiError{StatusCode: statusCode, Message: redactKeys(message)}
 }
 
 // RequestConfig is the API key and base URLs for one caller.
@@ -78,6 +135,7 @@ func (c RequestConfig) requireKey() error {
 	if !validKeyText(c.APIKey) {
 		return errors.New("invalid parameter: api_key has surrounding whitespace or control characters")
 	}
+	rememberKey(c.APIKey)
 	return nil
 }
 
@@ -346,9 +404,9 @@ func getFileBodyError(status int, contentType, body string) error {
 		// A JSON error body is the API reporting a failure, so it carries the
 		// status like any other; text that is not JSON stays a plain error.
 		if json.Valid([]byte(strings.TrimSpace(body))) {
-			return &ZBApiError{StatusCode: status, Message: message}
+			return apiError(status, message)
 		}
-		return errors.New(message)
+		return statusError(status, message)
 	}
 	return nil
 }

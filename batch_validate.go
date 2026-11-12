@@ -110,7 +110,7 @@ func validateBatchWithOptions(cfg RequestConfig, emails_list []EmailToValidate, 
 			if message == "" {
 				message = "Invalid API Key or your account ran out of credits"
 			}
-			return ValidateBatchResponse{}, &ZBApiError{StatusCode: response.StatusCode, Message: message}
+			return ValidateBatchResponse{}, apiError(response.StatusCode, message)
 		}
 	}
 	return *response_object, nil

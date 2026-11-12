@@ -236,7 +236,7 @@ func GenericFileSubmit(
 		return nil, error_
 	}
 	if response_http.StatusCode != 201 {
-		return nil, errors.New(messageFromBody(response_http.StatusCode, response_http.Header.Get("Content-Type"), string(body)))
+		return nil, statusError(response_http.StatusCode, messageFromBody(response_http.StatusCode, response_http.Header.Get("Content-Type"), string(body)))
 	}
 	return response_object, nil
 }
