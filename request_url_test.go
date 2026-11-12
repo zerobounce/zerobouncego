@@ -25,13 +25,17 @@ func csvUpload() CsvFile {
 	return CsvFile{File: strings.NewReader("a@example.com\n"), FileName: "a.csv", EmailAddressColumn: 1}
 }
 
+// sweepDownloads receives what the download calls in publicRequestCalls write,
+// so a test can check that a failed download wrote nothing.
+var sweepDownloads bytes.Buffer
+
 // publicRequestCalls covers every exported function and method that sends a
 // request. TestEveryPublicRequestFunctionIsSwept keeps the list complete.
 func publicRequestCalls(client *Client, warmup *WarmupClient) []requestCall {
 	email := "a@example.com"
 	fileID := testing_file_id
 	job := BulkFileJobOptions{FileName: "a.csv", ReturnURL: "https://example.com/done"}
-	var sink bytes.Buffer
+	sink := &sweepDownloads
 	return []requestCall{
 		{"GetCredits", func() error { _, err := GetCredits(); return err }},
 		{"GetApiUsage", func() error { _, err := GetApiUsage(time.Now(), time.Now()); return err }},
@@ -74,19 +78,19 @@ func publicRequestCalls(client *Client, warmup *WarmupClient) []requestCall {
 		{"DeleteFilter", func() error { _, err := DeleteFilter("allow", "email", email); return err }},
 		{"BulkValidationSubmit", func() error { _, err := BulkValidationSubmit(csvUpload(), false); return err }},
 		{"BulkValidationFileStatus", func() error { _, err := BulkValidationFileStatus(fileID); return err }},
-		{"BulkValidationResult", func() error { return BulkValidationResult(fileID, &sink) }},
-		{"BulkValidationResultWithOptions", func() error { return BulkValidationResultWithOptions(fileID, &sink, nil) }},
+		{"BulkValidationResult", func() error { return BulkValidationResult(fileID, sink) }},
+		{"BulkValidationResultWithOptions", func() error { return BulkValidationResultWithOptions(fileID, sink, nil) }},
 		{"BulkValidationFileDelete", func() error { _, err := BulkValidationFileDelete(fileID); return err }},
 		{"AiScoringFileSubmit", func() error { _, err := AiScoringFileSubmit(csvUpload(), false); return err }},
 		{"AiScoringFileStatus", func() error { _, err := AiScoringFileStatus(fileID); return err }},
-		{"AiScoringResult", func() error { return AiScoringResult(fileID, &sink) }},
-		{"AiScoringResultWithOptions", func() error { return AiScoringResultWithOptions(fileID, &sink, nil) }},
+		{"AiScoringResult", func() error { return AiScoringResult(fileID, sink) }},
+		{"AiScoringResultWithOptions", func() error { return AiScoringResultWithOptions(fileID, sink, nil) }},
 		{"AiScoringFileDelete", func() error { _, err := AiScoringFileDelete(fileID); return err }},
 		{"GenericFileSubmit", func() error { _, err := GenericFileSubmit(csvUpload(), false, ENDPOINT_FILE_SEND); return err }},
 		{"GenericFileStatusCheck", func() error { _, err := GenericFileStatusCheck(fileID, ENDPOINT_FILE_STATUS); return err }},
-		{"GenericResultFetch", func() error { return GenericResultFetch(fileID, ENDPOINT_FILE_RESULT, &sink) }},
+		{"GenericResultFetch", func() error { return GenericResultFetch(fileID, ENDPOINT_FILE_RESULT, sink) }},
 		{"GenericResultFetchWithOptions", func() error {
-			return GenericResultFetchWithOptions(fileID, ENDPOINT_FILE_RESULT, &sink, nil)
+			return GenericResultFetchWithOptions(fileID, ENDPOINT_FILE_RESULT, sink, nil)
 		}},
 		{"GenericFileDelete", func() error { _, err := GenericFileDelete(fileID, ENDPOINT_FILE_DELETE); return err }},
 		{"BulkEmailFinderSubmit", func() error {
@@ -94,14 +98,14 @@ func publicRequestCalls(client *Client, warmup *WarmupClient) []requestCall {
 			return err
 		}},
 		{"BulkEmailFinderFileStatus", func() error { _, err := BulkEmailFinderFileStatus(fileID); return err }},
-		{"BulkEmailFinderResult", func() error { return BulkEmailFinderResult(fileID, &sink) }},
+		{"BulkEmailFinderResult", func() error { return BulkEmailFinderResult(fileID, sink) }},
 		{"BulkEmailFinderFileDelete", func() error { _, err := BulkEmailFinderFileDelete(fileID); return err }},
 		{"BulkDomainSearchSubmit", func() error {
 			_, err := BulkDomainSearchSubmit(DomainSearchCsvFile{File: strings.NewReader("example.com\n"), FileName: "d.csv", DomainColumn: 1})
 			return err
 		}},
 		{"BulkDomainSearchFileStatus", func() error { _, err := BulkDomainSearchFileStatus(fileID); return err }},
-		{"BulkDomainSearchResult", func() error { return BulkDomainSearchResult(fileID, &sink) }},
+		{"BulkDomainSearchResult", func() error { return BulkDomainSearchResult(fileID, sink) }},
 		{"BulkDomainSearchFileDelete", func() error { _, err := BulkDomainSearchFileDelete(fileID); return err }},
 		{"ListEvaluatorSubmit", func() error {
 			_, err := ListEvaluatorSubmit(ListEvaluatorCsvFile{File: strings.NewReader("a@example.com\n"), FileName: "l.csv", EmailAddressColumn: 1})
