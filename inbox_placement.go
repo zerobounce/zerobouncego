@@ -72,7 +72,7 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 	if response_http.StatusCode < 200 || response_http.StatusCode > 299 {
 		return ErrorFromResponse(response_http)
 	}
-	payload, error_ := readLimitedBody(response_http.Body)
+	payload, error_ := readLimitedBody(response_http.Body, response_http.StatusCode)
 	if error_ != nil {
 		return error_
 	}

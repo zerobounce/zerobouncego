@@ -94,11 +94,8 @@ func validateBatchWithOptions(cfg RequestConfig, emails_list []EmailToValidate, 
 	}
 	defer response.Body.Close()
 
-	body, error_ := readLimitedBody(response.Body)
+	body, error_ := readLimitedBody(response.Body, response.StatusCode)
 	if error_ != nil {
-		if len(body) > 0 && strings.Contains(error_.Error(), "not valid JSON") {
-			return *response_object, error_
-		}
 		return *response_object, error_
 	}
 	if error_ = decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, response_object); error_ != nil {

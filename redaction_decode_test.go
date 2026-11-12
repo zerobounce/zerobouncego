@@ -30,12 +30,12 @@ var secretEncodings = []secretEncoding{
 	}},
 }
 
-// encodingSequences is every sequence of up to three secretEncodings: the
+// encodingSequences is every sequence of up to maxDepth secretEncodings: the
 // whole space the random fuzz below samples from, so none is left to chance.
-func encodingSequences() [][]secretEncoding {
+func encodingSequences(maxDepth int) [][]secretEncoding {
 	sequences := [][]secretEncoding{nil}
 	frontier := [][]secretEncoding{nil}
-	for depth := 0; depth < 3; depth++ {
+	for depth := 0; depth < maxDepth; depth++ {
 		var next [][]secretEncoding
 		for _, prefix := range frontier {
 			for _, encoding := range secretEncodings {
@@ -58,7 +58,7 @@ func applyEncodings(text string, sequence []secretEncoding) (string, string) {
 	return text, strings.Join(names, ">")
 }
 
-// decodedViews is text and every decoding of it up to three layers deep, made
+// decodedViews is text and every decoding of it up to four layers deep, made
 // with the standard library's own decoders (independent of the SDK's).
 func decodedViews(text string) []string {
 	decoders := []func(string) (string, bool){
@@ -72,7 +72,7 @@ func decodedViews(text string) []string {
 	}
 	views := []string{text}
 	frontier := []string{text}
-	for depth := 0; depth < 3; depth++ {
+	for depth := 0; depth < 4; depth++ {
 		var next []string
 		for _, view := range frontier {
 			// Decode the bracketed echo alone where it survives, so text
@@ -108,10 +108,11 @@ func assertNoDecodedSecret(t *testing.T, label string, texts []string, secrets .
 	}
 }
 
-// Redaction is closed under encoding: whatever sequence of up to three URL
-// (%20 or +) and JSON (with or without \/) encodings a server wraps a secret
-// in, no decoded view of the message holds it. A spelling maskSecrets does not
-// generate drops the message for credentialOmittedMessage. Every sequence is
+// Redaction is closed under encoding: whatever sequence of up to four URL
+// (%20 or +) and JSON (with or without \/) encodings a secret is wrapped in
+// (the SDK's own request encoding plus three echo layers), no decoded view of
+// the message holds it. A spelling maskSecrets does not generate drops the
+// message for credentialOmittedMessage. Every sequence is
 // tried, then a seeded random sample with random surrounding text.
 func TestRedactionIsClosedUnderEncoding(t *testing.T) {
 	rememberKey(decodeSecret)
@@ -131,8 +132,8 @@ func TestRedactionIsClosedUnderEncoding(t *testing.T) {
 			assertNoDecodedSecret(t, name+" "+label, []string{got}, decodeSecret)
 		}
 	}
-	sequences := encodingSequences()
-	if len(sequences) != 1+4+16+64 {
+	sequences := encodingSequences(4)
+	if len(sequences) != 1+4+16+64+256 {
 		t.Fatalf("%d sequences", len(sequences))
 	}
 	omitted := 0
@@ -151,7 +152,7 @@ func TestRedactionIsClosedUnderEncoding(t *testing.T) {
 	}
 	random := rand.New(rand.NewSource(20261112))
 	for i := 0; i < 500; i++ {
-		sequence := make([]secretEncoding, random.Intn(4))
+		sequence := make([]secretEncoding, random.Intn(5))
 		for j := range sequence {
 			sequence[j] = secretEncodings[random.Intn(len(secretEncodings))]
 		}
@@ -173,7 +174,7 @@ func TestRedactionIsClosedUnderEncoding(t *testing.T) {
 // password and username are checked the same way.
 func TestEveryRequestKeepsEveryEncodingOfTheKeyOutOfItsError(t *testing.T) {
 	secret := decodeSecret
-	sequences := encodingSequences()
+	sequences := encodingSequences(3)
 	for _, sequence := range sequences {
 		encoded, label := applyEncodings(secret, sequence)
 		for _, shape := range []string{"400 text", "200 JSON"} {
@@ -210,5 +211,41 @@ func TestEveryRequestKeepsEveryEncodingOfTheKeyOutOfItsError(t *testing.T) {
 				t.Fatalf("%s %s: only %d of %d calls failed", label, shape, failed, len(calls))
 			}
 		}
+	}
+}
+
+// Each decode step of the secret check is needed: every text below holds the
+// secret behind exactly one kind of escape that only that step undoes, and
+// none of them is a spelling maskSecrets generates, so only the decode check
+// can drop it. Removing a step, its lower-case hex, its surrogate pairs, or a
+// layer of depth leaks the secret; a NUL or %00 before it does not end the
+// check, and an invalid UTF-8 run before it does not stop the percent decoder.
+func TestEachDecodeStepOfTheSecretCheckIsNeeded(t *testing.T) {
+	cases := []struct{ name, secret, text string }{
+		// '+' stays a plus: only percent-decoding without + as space works.
+		{"percent, + kept", "k+y/z", "echo k+y%2fz end"},
+		{"percent, upper-case hex", "k+y/z", "echo k+y%2Fz end"},
+		// A space sent as +: only percent-decoding with + as space works.
+		{"percent, + as space", "k y/z", "echo k+y%2fz end"},
+		{"JSON escape", `k"y`, `echo k\"y end`},
+		{`JSON \/`, "k/y", `echo k\/y end`},
+		{`JSON \uXXXX`, "k/y", `echo k\u002fy end`},
+		{`JSON \uXXXX lower-case`, "k\u00e9y", `echo k\u00e9y end`},
+		{"JSON surrogate pair", "k\U0001F600y", `echo k\ud83d\ude00y end`},
+		{"NUL before", "k+y/z", "a\x00b echo k+y%2fz end"},
+		{"%00 before", "k+y/z", "a%00b echo k+y%2fz end"},
+		{"invalid UTF-8 run before", "k+y/z", "%ff%fe\xff echo k+y%2fz end"},
+		// Four layers: four percent-encodings of '/', the last one with %25.
+		{"four layers", "k/y", "echo k%2525252fy end"},
+	}
+	for _, c := range cases {
+		if got := omitIfSecretSurvives(c.text, c.secret); got != credentialOmittedMessage {
+			t.Errorf("%s: %q kept, holds %q", c.name, got, c.secret)
+		}
+	}
+	// Five layers is past the promise: the text is kept, so the depth is
+	// exactly four and the check is not dropping every escaped text.
+	if got := omitIfSecretSurvives("echo k%252525252fy end", "k/y"); got == credentialOmittedMessage {
+		t.Error("a five-layer spelling was dropped: the depth is not four")
 	}
 }

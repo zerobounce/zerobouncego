@@ -284,10 +284,11 @@ func handleErrorPayload(response *http.Response) error {
 // status above 299 it is a *ZBApiError carrying that status.
 // The caller owns closing the body when it does not use handleErrorPayload.
 func ErrorFromResponse(response *http.Response) error {
-	responseBody, err := readLimitedBody(response.Body)
+	responseBody, err := readLimitedBody(response.Body, response.StatusCode)
 	if err != nil {
-		if len(responseBody) > 0 && strings.Contains(err.Error(), "not valid JSON") {
-			return statusError(response.StatusCode, err.Error())
+		var apiErr *ZBApiError
+		if errors.As(err, &apiErr) {
+			return err
 		}
 		// A body that could not be read is a transport failure: on a 2xx it
 		// carries no status.
@@ -379,11 +380,8 @@ func doGetRequestWith(requestURL string, object APIResponse, decode func(int, st
 	}
 	defer response.Body.Close()
 
-	body, err := readLimitedBody(response.Body)
+	body, err := readLimitedBody(response.Body, response.StatusCode)
 	if err != nil {
-		if len(body) > 0 && strings.Contains(err.Error(), "not valid JSON") {
-			return err
-		}
 		return err
 	}
 	return decode(response.StatusCode, response.Header.Get("Content-Type"), body, object)
@@ -414,11 +412,8 @@ func doPostFormRequest(cfg RequestConfig, endpoint string, form url.Values, obje
 	}
 	defer response.Body.Close()
 
-	body, err := readLimitedBody(response.Body)
+	body, err := readLimitedBody(response.Body, response.StatusCode)
 	if err != nil {
-		if len(body) > 0 && strings.Contains(err.Error(), "not valid JSON") {
-			return err
-		}
 		return err
 	}
 	return decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, object)

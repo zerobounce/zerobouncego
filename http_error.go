@@ -18,6 +18,10 @@ import (
 
 const maxJSONBodyBytes = 2 << 20
 
+// oversizeBodyMessage reports a response larger than maxJSONBodyBytes. It is
+// a *ZBApiError with the response's status, a 2xx included.
+const oversizeBodyMessage = "ZeroBounce returned a response larger than 2 MiB, which is not a valid API response."
+
 // ZBApiError is a failed API response. It carries the HTTP status so callers
 // can tell a 403 (Cloudflare) from a 400/404 (API) or a 429 (rate limit).
 // It may be wrapped, so match it with errors.As.
@@ -144,8 +148,8 @@ const credentialOmittedMessage = "ZeroBounce's response was omitted from this er
 
 // omitIfSecretSurvives closes redaction under encoding: maskSecrets replaces
 // the spellings this package can generate, and any other spelling (lowercase
-// percent escapes, a fourth layer, another JSON escaper) is caught here by
-// decoding what is left. When any view of text, decoded up to three layers
+// percent escapes, another JSON escaper) is caught here by decoding what is
+// left. When any view of text, decoded up to maxSecretDecodeLayers layers
 // deep in any order (percent-decoding, percent-decoding with + as a space,
 // JSON-unescaping with \/ and \uXXXX), contains a secret, the whole text is
 // dropped for credentialOmittedMessage.
@@ -161,7 +165,7 @@ func omitIfSecretSurvives(text string, secrets ...string) string {
 	}
 	views := []string{text}
 	seen := map[string]bool{text: true}
-	for layer := 0; layer <= 3; layer++ {
+	for layer := 0; layer <= maxSecretDecodeLayers; layer++ {
 		var next []string
 		for _, view := range views {
 			for _, secret := range present {
@@ -169,7 +173,7 @@ func omitIfSecretSurvives(text string, secrets ...string) string {
 					return credentialOmittedMessage
 				}
 			}
-			if layer == 3 {
+			if layer == maxSecretDecodeLayers {
 				continue
 			}
 			for _, decode := range secretDecoders {
@@ -184,6 +188,10 @@ func omitIfSecretSurvives(text string, secrets ...string) string {
 	}
 	return text
 }
+
+// maxSecretDecodeLayers is how deep omitIfSecretSurvives decodes: the SDK's
+// own request encoding plus three layers a server or proxy may echo it in.
+const maxSecretDecodeLayers = 4
 
 // secretDecoders undo one layer of each encoding a server may echo a secret
 // in. They are lenient: a sequence that does not decode is kept as it is.
@@ -332,13 +340,17 @@ func validKeyText(key string) bool {
 	return !strings.ContainsFunc(key, func(r rune) bool { return r < 32 || r == 127 })
 }
 
-func readLimitedBody(reader io.Reader) ([]byte, error) {
+// readLimitedBody reads a JSON response body of at most maxJSONBodyBytes. A
+// larger body is a *ZBApiError with the response's status (a 500 stays a 500,
+// a 2xx is an API error with that status); a body that cannot be read is a
+// transport failure, returned as it is.
+func readLimitedBody(reader io.Reader, statusCode int) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(reader, maxJSONBodyBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	if len(body) > maxJSONBodyBytes {
-		return body[:4096], errors.New("ZeroBounce returned a response that is not valid JSON.")
+		return nil, &ZBApiError{StatusCode: statusCode, Message: oversizeBodyMessage}
 	}
 	return body, nil
 }
@@ -565,6 +577,11 @@ func decodeJSONBody(status int, contentType string, body []byte, dest interface{
 	}
 	// The body is valid JSON (ensureJSONAPIBody), so this fails only when it
 	// is not the shape the call returns, e.g. a bare string or number.
+	// encoding/json takes null as "leave dest as it is", which would hand back
+	// a result of zero values; only a raw-JSON result (*interface{}) takes it.
+	if _, raw := dest.(*interface{}); !raw && string(bytes.Trim(body, " \t\r\n")) == "null" {
+		return statusError(status, unexpectedJSONShapeMessage)
+	}
 	if err := json.Unmarshal(body, dest); err != nil {
 		return statusError(status, unexpectedJSONShapeMessage)
 	}

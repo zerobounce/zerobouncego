@@ -1,5 +1,6 @@
 # Strict JSON corpus (standard.md §3, check E7). One JSON-encoded string per line: decode the line with a JSON parser to get the exact response body.
 # Every SDK must reject each REJECT body on every JSON call (API error, status 200) and accept each ACCEPT body as JSON.
+# Exception: a 2xx with an EMPTY body (zero bytes) is a documented success where standard.md says so (deleteInboxPlacementTest; Warmup calls that answer with no content); everywhere else the empty REJECT lines apply. A whitespace-only body is never empty.
 # Only RFC 8259 whitespace (space, tab, CR, LF) may surround a value; a UTF-8 BOM is rejected. Add a line whenever an audit finds a new lenient case.
 REJECT	"not json"
 REJECT	"{'a':1}"
