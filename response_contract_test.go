@@ -244,3 +244,46 @@ func TestNewWarmupClientRefusesHTTPAndTrimsTrailingSlashes(t *testing.T) {
 		t.Fatal("want two requests")
 	}
 }
+
+// The content type alone decides when it contradicts the body: a text/html
+// response is an HTML page even when its body looks like JSON (every call),
+// or like a CSV (every download, Warmup CSV downloads included), and a JSON
+// content type is not a result file even when the body looks like a CSV.
+// Each case is caught only by the content-type half of its guard.
+func TestEveryCallRejectsAContentTypeThatContradictsTheBody(t *testing.T) {
+	const csvBody = "email,status\na@example.com,valid\n"
+	csv := map[string]bool{}
+	for _, method := range warmupCSVMethods(t) {
+		csv["WarmupClient."+method] = true
+	}
+	downloads := downloadCalls(t)
+	cases := []struct {
+		name, contentType, body string
+		downloadsOnly           bool
+	}{
+		{"html content type, json body", "text/html; charset=UTF-8", `{"a":1}`, false},
+		{"html content type, csv body", "Text/HTML", csvBody, true},
+		{"json content type, csv body", "application/json; charset=utf-8", csvBody, true},
+	}
+	for _, tc := range cases {
+		calls := sweepWith(t, func(req *http.Request) *http.Response {
+			return textResponse(req, 200, tc.contentType, tc.body)
+		})
+		for _, call := range calls {
+			if tc.downloadsOnly && !downloads[call.name] && !csv[call.name] {
+				continue
+			}
+			t.Run(tc.name+"/"+call.name, func(t *testing.T) {
+				sweepDownloads.Reset()
+				err := call.call()
+				assertStatus200(t, err)
+				if !tc.downloadsOnly && !csv[call.name] && !strings.Contains(err.Error(), "HTML") {
+					t.Fatalf("message %q does not say HTML", err.Error())
+				}
+				if sweepDownloads.Len() != 0 {
+					t.Fatalf("wrote %d bytes", sweepDownloads.Len())
+				}
+			})
+		}
+	}
+}

@@ -1,12 +1,14 @@
 package zerobouncego
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -64,25 +66,45 @@ func rememberKey(key string) {
 var apiKeyParameter = regexp.MustCompile(`(?i)(api_key=)[^&\s"'<>]+`)
 
 // maskSecrets replaces every form of each secret in text with ***: as sent,
-// URL-encoded (query and path escaping) and JSON-escaped.
+// URL-encoded (spaces as + and as %20, and path escaping), JSON-escaped
+// (plain, and HTML-safe the way encoding/json writes &, < and >, each with
+// and without \/ for /), and the URL encoding of each JSON form, which is
+// how a server echoes a URL-encoded JSON request body. Longer forms are
+// replaced first, so a shorter one never leaves part of a longer one behind.
 func maskSecrets(text string, secrets ...string) string {
 	for _, secret := range secrets {
 		if secret == "" {
 			continue
 		}
-		quoted, _ := json.Marshal(secret)
-		jsonForm := string(quoted[1 : len(quoted)-1])
-		for _, form := range []string{
-			secret,
-			url.QueryEscape(secret),
-			url.PathEscape(secret),
-			jsonForm,
-			strings.ReplaceAll(jsonForm, "/", `\/`),
-		} {
+		for _, form := range secretForms(secret) {
 			text = strings.ReplaceAll(text, form, "***")
 		}
 	}
 	return text
+}
+
+// secretForms lists every form maskSecrets masks, longest first.
+func secretForms(secret string) []string {
+	queryForms := func(value string) []string {
+		escaped := url.QueryEscape(value)
+		return []string{escaped, strings.ReplaceAll(escaped, "+", "%20")}
+	}
+	htmlSafe, _ := json.Marshal(secret)
+	var plain bytes.Buffer
+	encoder := json.NewEncoder(&plain)
+	encoder.SetEscapeHTML(false)
+	_ = encoder.Encode(secret)
+	forms := []string{secret, url.PathEscape(secret)}
+	forms = append(forms, queryForms(secret)...)
+	for _, quoted := range []string{string(htmlSafe), strings.TrimSpace(plain.String())} {
+		jsonForm := quoted[1 : len(quoted)-1]
+		for _, escaped := range []string{jsonForm, strings.ReplaceAll(jsonForm, "/", `\/`)} {
+			forms = append(forms, escaped)
+			forms = append(forms, queryForms(escaped)...)
+		}
+	}
+	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
+	return forms
 }
 
 // redactKeys masks every API key this process has sent, and any api_key

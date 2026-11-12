@@ -164,3 +164,47 @@ func TestRedactKeysMasksEveryFormOfASentKey(t *testing.T) {
 		t.Fatalf("redactKeys = %q\nwant %q", got, want)
 	}
 }
+
+// Every form a server can echo a secret in is masked, each one on its own: as
+// sent, URL-encoded (spaces as + and as %20, and path escaping), JSON-escaped
+// (plain, and with <, >, & as \u003c, \u003e, \u0026 the way encoding/json
+// writes them, each with and without \/), and the URL encoding of each JSON
+// form (a server echoing a URL-encoded JSON request body). The secret holds
+// every character those encodings treat differently, and the expected forms
+// are written out here, so dropping any one form fails.
+func TestMaskSecretsMasksEveryEncodingOfASecret(t *testing.T) {
+	secret := `a b"c/d+e%f&g=h<i>j'k\l`
+	// encoding/json writes &, < and > as these escapes (\x5c is a backslash).
+	htmlEscapedJSON := strings.NewReplacer("&", "\x5cu0026", "<", "\x5cu003c", ">", "\x5cu003e").Replace
+	forms := []struct{ name, text string }{
+		{"raw", `a b"c/d+e%f&g=h<i>j'k\l`},
+		{"query", `a+b%22c%2Fd%2Be%25f%26g%3Dh%3Ci%3Ej%27k%5Cl`},
+		{"query %20", `a%20b%22c%2Fd%2Be%25f%26g%3Dh%3Ci%3Ej%27k%5Cl`},
+		{"path", `a%20b%22c%2Fd+e%25f&g=h%3Ci%3Ej%27k%5Cl`},
+		{"json", `a b\"c/d+e%f&g=h<i>j'k\\l`},
+		{"query json", `a+b%5C%22c%2Fd%2Be%25f%26g%3Dh%3Ci%3Ej%27k%5C%5Cl`},
+		{"query %20 json", `a%20b%5C%22c%2Fd%2Be%25f%26g%3Dh%3Ci%3Ej%27k%5C%5Cl`},
+		{"json html", htmlEscapedJSON(`a b\"c/d+e%f&g=h<i>j'k\\l`)},
+		{"query json html", `a+b%5C%22c%2Fd%2Be%25f%5Cu0026g%3Dh%5Cu003ci%5Cu003ej%27k%5C%5Cl`},
+		{"query %20 json html", `a%20b%5C%22c%2Fd%2Be%25f%5Cu0026g%3Dh%5Cu003ci%5Cu003ej%27k%5C%5Cl`},
+		{`json \/`, `a b\"c\/d+e%f&g=h<i>j'k\\l`},
+		{`query json \/`, `a+b%5C%22c%5C%2Fd%2Be%25f%26g%3Dh%3Ci%3Ej%27k%5C%5Cl`},
+		{`query %20 json \/`, `a%20b%5C%22c%5C%2Fd%2Be%25f%26g%3Dh%3Ci%3Ej%27k%5C%5Cl`},
+		{`json html \/`, htmlEscapedJSON(`a b\"c\/d+e%f&g=h<i>j'k\\l`)},
+		{`query json html \/`, `a+b%5C%22c%5C%2Fd%2Be%25f%5Cu0026g%3Dh%5Cu003ci%5Cu003ej%27k%5C%5Cl`},
+		{`query %20 json html \/`, `a%20b%5C%22c%5C%2Fd%2Be%25f%5Cu0026g%3Dh%5Cu003ci%5Cu003ej%27k%5C%5Cl`},
+	}
+	for _, form := range forms {
+		t.Run(form.name, func(t *testing.T) {
+			got := maskSecrets("echo ["+form.text+"] end", secret)
+			if got != "echo [***] end" {
+				t.Fatalf("maskSecrets left the %s form: %q", form.name, got)
+			}
+		})
+	}
+	// The raw form of `"k` sits inside its JSON form `\"k`: masking the
+	// shorter form first would leave a stray backslash behind.
+	if got := maskSecrets(`{"error":"bad key \"k"}`, `"k`); got != `{"error":"bad key ***"}` {
+		t.Fatalf("a shorter form was masked inside a longer one: %q", got)
+	}
+}

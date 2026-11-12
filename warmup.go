@@ -143,12 +143,20 @@ func (c *WarmupClient) send(method, path string, params url.Values, body interfa
 // json decodes a successful response, or returns nil for the documented empty
 // successes (204, and an empty 200).
 func (c *WarmupClient) json(method, path string, params url.Values, body interface{}, secrets ...string) (map[string]interface{}, error) {
-	status, payload, _, err := c.send(method, path, params, body, secrets...)
+	status, payload, header, err := c.send(method, path, params, body, secrets...)
 	if err != nil {
 		return nil, err
 	}
 	if status == http.StatusNoContent || len(bytes.TrimSpace(payload)) == 0 {
 		return nil, nil
+	}
+	// A text/html response is a page (a proxy or challenge), not the API's
+	// answer, even when its body happens to parse as JSON.
+	if contentTypeIsHTML(header.Get("Content-Type")) {
+		return nil, &ZBApiError{
+			StatusCode: status,
+			Message:    "ZeroBounce returned an HTML error page instead of an API response.",
+		}
 	}
 	var out interface{}
 	if err := json.Unmarshal(payload, &out); err != nil {
