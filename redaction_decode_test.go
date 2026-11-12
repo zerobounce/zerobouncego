@@ -1,0 +1,214 @@
+package zerobouncego
+
+import (
+	"encoding/json"
+	"fmt"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+// decodeSecret is a secret holding every character an encoding changes:
+// space " / \ + % & = < > '.
+const decodeSecret = `a b"c/d+e%f&g=h<i>j'k\l`
+
+// secretEncoding is one layer a server may wrap a secret in.
+type secretEncoding struct {
+	name   string
+	encode func(string) string
+}
+
+var secretEncodings = []secretEncoding{
+	{"url%20", func(text string) string { return strings.ReplaceAll(url.QueryEscape(text), "+", "%20") }},
+	{"url+", url.QueryEscape},
+	{"json", func(text string) string { encoded, _ := json.Marshal(text); return string(encoded[1 : len(encoded)-1]) }},
+	{`json\/`, func(text string) string {
+		encoded, _ := json.Marshal(text)
+		return strings.ReplaceAll(string(encoded[1:len(encoded)-1]), "/", `\/`)
+	}},
+}
+
+// encodingSequences is every sequence of up to three secretEncodings: the
+// whole space the random fuzz below samples from, so none is left to chance.
+func encodingSequences() [][]secretEncoding {
+	sequences := [][]secretEncoding{nil}
+	frontier := [][]secretEncoding{nil}
+	for depth := 0; depth < 3; depth++ {
+		var next [][]secretEncoding
+		for _, prefix := range frontier {
+			for _, encoding := range secretEncodings {
+				sequence := append(append([]secretEncoding{}, prefix...), encoding)
+				next = append(next, sequence)
+			}
+		}
+		sequences = append(sequences, next...)
+		frontier = next
+	}
+	return sequences
+}
+
+func applyEncodings(text string, sequence []secretEncoding) (string, string) {
+	names := []string{"raw"}
+	for _, encoding := range sequence {
+		text = encoding.encode(text)
+		names = append(names, encoding.name)
+	}
+	return text, strings.Join(names, ">")
+}
+
+// decodedViews is text and every decoding of it up to three layers deep, made
+// with the standard library's own decoders (independent of the SDK's).
+func decodedViews(text string) []string {
+	decoders := []func(string) (string, bool){
+		func(s string) (string, bool) { out, err := url.PathUnescape(s); return out, err == nil },
+		func(s string) (string, bool) { out, err := url.QueryUnescape(s); return out, err == nil },
+		func(s string) (string, bool) {
+			var out string
+			err := json.Unmarshal([]byte(`"`+s+`"`), &out)
+			return out, err == nil
+		},
+	}
+	views := []string{text}
+	frontier := []string{text}
+	for depth := 0; depth < 3; depth++ {
+		var next []string
+		for _, view := range frontier {
+			// Decode the bracketed echo alone where it survives, so text
+			// around it (quotes in the message) does not stop a decoder.
+			candidates := []string{view}
+			if start, end := strings.Index(view, "["), strings.LastIndex(view, "]"); start >= 0 && end > start {
+				candidates = append(candidates, view[start+1:end])
+			}
+			for _, candidate := range candidates {
+				for _, decode := range decoders {
+					if out, ok := decode(candidate); ok && out != candidate {
+						next = append(next, out)
+					}
+				}
+			}
+		}
+		views = append(views, next...)
+		frontier = next
+	}
+	return views
+}
+
+func assertNoDecodedSecret(t *testing.T, label string, texts []string, secrets ...string) {
+	t.Helper()
+	for _, text := range texts {
+		for _, view := range decodedViews(text) {
+			for _, secret := range secrets {
+				if strings.Contains(view, secret) {
+					t.Fatalf("%s: a decoded view of %q holds the secret", label, text)
+				}
+			}
+		}
+	}
+}
+
+// Redaction is closed under encoding: whatever sequence of up to three URL
+// (%20 or +) and JSON (with or without \/) encodings a server wraps a secret
+// in, no decoded view of the message holds it. A spelling maskSecrets does not
+// generate drops the message for credentialOmittedMessage. Every sequence is
+// tried, then a seeded random sample with random surrounding text.
+func TestRedactionIsClosedUnderEncoding(t *testing.T) {
+	rememberKey(decodeSecret)
+	warmup, err := NewWarmupClient("warmup-key-1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	redactors := map[string]func(string) string{
+		"API key":       redactKeys,
+		"Warmup key":    func(text string) string { return (&WarmupClient{apiKey: decodeSecret}).redact(text) },
+		"SMTP password": func(text string) string { return warmup.redact(text, decodeSecret, "smtp-user") },
+		"SMTP username": func(text string) string { return warmup.redact(text, "smtp-password", decodeSecret) },
+	}
+	check := func(label, message string) {
+		for name, redact := range redactors {
+			got := redact(message)
+			assertNoDecodedSecret(t, name+" "+label, []string{got}, decodeSecret)
+		}
+	}
+	sequences := encodingSequences()
+	if len(sequences) != 1+4+16+64 {
+		t.Fatalf("%d sequences", len(sequences))
+	}
+	omitted := 0
+	for _, sequence := range sequences {
+		encoded, label := applyEncodings(decodeSecret, sequence)
+		check(label, "echo ["+encoded+"] end")
+		if redactKeys("echo ["+encoded+"] end") == credentialOmittedMessage {
+			omitted++
+		}
+	}
+	// Some three-layer spellings are not generated by maskSecrets, so the
+	// decode check has to have dropped them; if none was dropped, the check
+	// was not exercised.
+	if omitted == 0 {
+		t.Fatal("no message needed the decode check")
+	}
+	random := rand.New(rand.NewSource(20261112))
+	for i := 0; i < 500; i++ {
+		sequence := make([]secretEncoding, random.Intn(4))
+		for j := range sequence {
+			sequence[j] = secretEncodings[random.Intn(len(secretEncodings))]
+		}
+		encoded, label := applyEncodings(decodeSecret, sequence)
+		if random.Intn(2) == 0 {
+			encoded = strings.ToLower(encoded) // lowercase percent escapes, <
+		}
+		check(fmt.Sprintf("random %d %s", i, label), fmt.Sprintf(`{"x":%d} [%s] "q"`, random.Intn(1000), encoded))
+	}
+	// A message without a secret is kept as it is.
+	if got := redactKeys("Invalid email %2F address \\u0041"); got != "Invalid email %2F address \\u0041" {
+		t.Fatalf("redactKeys changed a message without a secret: %q", got)
+	}
+}
+
+// The same through every request function: whatever encoding of its own key a
+// response echoes, at a 400 (text) or a 200 (JSON error), no decoded view of
+// the error, its fields or its wrapped errors holds the key. The Warmup SMTP
+// password and username are checked the same way.
+func TestEveryRequestKeepsEveryEncodingOfTheKeyOutOfItsError(t *testing.T) {
+	secret := decodeSecret
+	sequences := encodingSequences()
+	for _, sequence := range sequences {
+		encoded, label := applyEncodings(secret, sequence)
+		for _, shape := range []string{"400 text", "200 JSON"} {
+			useFake(t)
+			http.DefaultTransport = &keyEchoTransport{respond: func(req *http.Request, key string) *http.Response {
+				if shape == "400 text" {
+					return echoResponse(req, 400, "text/plain", "Bad key ["+encoded+"] end")
+				}
+				return echoResponse(req, 200, CONTENT_TYPE_JSON, `{"error":"Bad key [`+jsonQuoted(encoded)+`] end"}`)
+			}}
+			client, _ := pointEverythingAt(t, "https://api.example.test")
+			API_KEY = secret
+			client.APIKey = secret
+			warmup, err := NewWarmupClient(secret, "https://warmup.example.test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := publicRequestCalls(client, warmup)
+			calls = append(calls, requestCall{"WarmupClient.TestSMTPConfiguration(secret)", func() error {
+				_, err := warmup.TestSMTPConfiguration("a@example.com", secret+"u", secret, "smtp.example.com", 587)
+				return err
+			}})
+			failed := 0
+			for _, call := range calls {
+				err := call.call()
+				if err == nil {
+					continue
+				}
+				failed++
+				texts := append(errorTexts(err), fmt.Sprintf("%#v", err), fmt.Sprintf("%+v", err))
+				assertNoDecodedSecret(t, label+" "+shape+" "+call.name, texts, secret)
+			}
+			if failed < len(calls)/2 {
+				t.Fatalf("%s %s: only %d of %d calls failed", label, shape, failed, len(calls))
+			}
+		}
+	}
+}

@@ -77,7 +77,8 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 		return error_
 	}
 	// An empty 2xx (a 204 from DELETE) is a success with nothing to decode.
-	if len(strings.TrimSpace(string(payload))) == 0 {
+	// A body of whitespace is not empty: it is not JSON either.
+	if len(payload) == 0 {
 		return nil
 	}
 	// The same checks as every other call: {"success": false} and an

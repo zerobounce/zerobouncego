@@ -9,8 +9,11 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf16"
 )
 
 const maxJSONBodyBytes = 2 << 20
@@ -123,14 +126,156 @@ func jsonEscaped(text string, htmlSafe bool) string {
 }
 
 // redactKeys masks every API key this process has sent, and any api_key
-// parameter value, in a message built from a response body.
+// parameter value, in a message built from a response body. A message that
+// still holds a key in a decoded view is replaced (omitIfSecretSurvives).
 func redactKeys(message string) string {
 	keys := []string{API_KEY}
 	sentKeys.Range(func(key, _ interface{}) bool {
 		keys = append(keys, key.(string))
 		return true
 	})
-	return apiKeyParameter.ReplaceAllString(maskSecrets(message, keys...), "${1}***")
+	masked := apiKeyParameter.ReplaceAllString(maskSecrets(message, keys...), "${1}***")
+	return omitIfSecretSurvives(masked, keys...)
+}
+
+// credentialOmittedMessage replaces a message that still held a secret after
+// masking.
+const credentialOmittedMessage = "ZeroBounce's response was omitted from this error because it contained a credential."
+
+// omitIfSecretSurvives closes redaction under encoding: maskSecrets replaces
+// the spellings this package can generate, and any other spelling (lowercase
+// percent escapes, a fourth layer, another JSON escaper) is caught here by
+// decoding what is left. When any view of text, decoded up to three layers
+// deep in any order (percent-decoding, percent-decoding with + as a space,
+// JSON-unescaping with \/ and \uXXXX), contains a secret, the whole text is
+// dropped for credentialOmittedMessage.
+func omitIfSecretSurvives(text string, secrets ...string) string {
+	var present []string
+	for _, secret := range secrets {
+		if secret != "" {
+			present = append(present, secret)
+		}
+	}
+	if len(present) == 0 {
+		return text
+	}
+	views := []string{text}
+	seen := map[string]bool{text: true}
+	for layer := 0; layer <= 3; layer++ {
+		var next []string
+		for _, view := range views {
+			for _, secret := range present {
+				if strings.Contains(view, secret) {
+					return credentialOmittedMessage
+				}
+			}
+			if layer == 3 {
+				continue
+			}
+			for _, decode := range secretDecoders {
+				decoded := decode(view)
+				if !seen[decoded] {
+					seen[decoded] = true
+					next = append(next, decoded)
+				}
+			}
+		}
+		views = next
+	}
+	return text
+}
+
+// secretDecoders undo one layer of each encoding a server may echo a secret
+// in. They are lenient: a sequence that does not decode is kept as it is.
+var secretDecoders = []func(string) string{
+	func(text string) string { return percentDecoded(text, false) },
+	func(text string) string { return percentDecoded(text, true) },
+	jsonUnescaped,
+}
+
+func hexValue(c byte) (byte, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return c - '0', true
+	case c >= 'a' && c <= 'f':
+		return c - 'a' + 10, true
+	case c >= 'A' && c <= 'F':
+		return c - 'A' + 10, true
+	}
+	return 0, false
+}
+
+func percentDecoded(text string, plusIsSpace bool) string {
+	var out strings.Builder
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c == '%' && i+2 < len(text) {
+			high, okHigh := hexValue(text[i+1])
+			low, okLow := hexValue(text[i+2])
+			if okHigh && okLow {
+				out.WriteByte(high<<4 | low)
+				i += 2
+				continue
+			}
+		}
+		if c == '+' && plusIsSpace {
+			out.WriteByte(' ')
+			continue
+		}
+		out.WriteByte(c)
+	}
+	return out.String()
+}
+
+func jsonUnescaped(text string) string {
+	var out strings.Builder
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c != '\\' || i+1 >= len(text) {
+			out.WriteByte(c)
+			continue
+		}
+		switch next := text[i+1]; next {
+		case '"', '\\', '/':
+			out.WriteByte(next)
+		case 'b':
+			out.WriteByte('\b')
+		case 'f':
+			out.WriteByte('\f')
+		case 'n':
+			out.WriteByte('\n')
+		case 'r':
+			out.WriteByte('\r')
+		case 't':
+			out.WriteByte('\t')
+		case 'u':
+			if i+5 < len(text) {
+				if code, err := strconv.ParseUint(text[i+2:i+6], 16, 32); err == nil {
+					r := rune(code)
+					// A surrogate pair (\ud83d\ude00) is one character.
+					if utf16.IsSurrogate(r) && i+11 < len(text) && text[i+6] == '\\' && text[i+7] == 'u' {
+						if low, err := strconv.ParseUint(text[i+8:i+12], 16, 32); err == nil {
+							if pair := utf16.DecodeRune(r, rune(low)); pair != unicode.ReplacementChar {
+								out.WriteRune(pair)
+								i += 11
+								continue
+							}
+						}
+					}
+					out.WriteRune(r)
+					i += 5
+					continue
+				}
+			}
+			out.WriteByte(c)
+			continue
+		default:
+			out.WriteByte(c)
+			continue
+		}
+		i++
+	}
+	return out.String()
 }
 
 // statusError is the error for a response that is not a usable API result: a
@@ -377,10 +522,13 @@ func ensureJSONAPIBody(status int, contentType string, body []byte) error {
 		return statusError(status, messageFromBody(status, contentType, text))
 	}
 	trimmed := strings.TrimSpace(text)
-	if trimmed[0] != '{' && trimmed[0] != '[' {
-		return statusError(status, messageFromBody(status, contentType, text))
-	}
+	// Strict RFC 8259 JSON on the body as received: json.Valid allows only
+	// space, tab, CR and LF around the value, and no BOM, comment, trailing
+	// comma or value, NaN or other extension (testdata/strict-json-corpus.tsv).
 	if !json.Valid(body) {
+		if trimmed[0] != '{' && trimmed[0] != '[' {
+			return statusError(status, messageFromBody(status, contentType, text))
+		}
 		return statusError(status, "ZeroBounce returned a response that is not valid JSON.")
 	}
 	// {"success": false, ...} on an HTTP 200 is a failure, not a result. The
@@ -415,8 +563,10 @@ func decodeJSONBody(status int, contentType string, body []byte, dest interface{
 	if err := ensureJSONAPIBody(status, contentType, body); err != nil {
 		return err
 	}
+	// The body is valid JSON (ensureJSONAPIBody), so this fails only when it
+	// is not the shape the call returns, e.g. a bare string or number.
 	if err := json.Unmarshal(body, dest); err != nil {
-		return errors.New("ZeroBounce returned a response that is not valid JSON.")
+		return statusError(status, unexpectedJSONShapeMessage)
 	}
 	return nil
 }
@@ -449,3 +599,7 @@ func getFileBodyError(status int, contentType, body string) error {
 	}
 	return nil
 }
+
+// unexpectedJSONShapeMessage reports a 2xx body that is valid JSON but not
+// the object or list the call returns (a bare string or number, say).
+const unexpectedJSONShapeMessage = "ZeroBounce returned JSON that is not the expected response."

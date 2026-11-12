@@ -83,9 +83,11 @@ func (c WarmupClient) Format(state fmt.State, verb rune) {
 	formatRedacted(state, verb, c.String(), c.GoString())
 }
 
-// redact removes every form of a secret from a message.
+// redact removes every form of a secret from a message, and drops a message
+// that still holds one in a decoded view (omitIfSecretSurvives).
 func (c *WarmupClient) redact(text string, secrets ...string) string {
-	return maskSecrets(text, append([]string{c.apiKey}, secrets...)...)
+	all := append([]string{c.apiKey}, secrets...)
+	return omitIfSecretSurvives(maskSecrets(text, all...), all...)
 }
 
 // send performs one Warmup request and returns the status and body.
@@ -147,7 +149,8 @@ func (c *WarmupClient) json(method, path string, params url.Values, body interfa
 	if err != nil {
 		return nil, err
 	}
-	if status == http.StatusNoContent || len(bytes.TrimSpace(payload)) == 0 {
+	// A body of whitespace is not empty: it is not JSON either.
+	if status == http.StatusNoContent || len(payload) == 0 {
 		return nil, nil
 	}
 	// A text/html response is a page (a proxy or challenge), not the API's
