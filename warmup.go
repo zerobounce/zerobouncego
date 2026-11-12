@@ -85,15 +85,7 @@ func (c WarmupClient) Format(state fmt.State, verb rune) {
 
 // redact removes every form of a secret from a message.
 func (c *WarmupClient) redact(text string, secrets ...string) string {
-	for _, secret := range append([]string{c.apiKey}, secrets...) {
-		if secret == "" {
-			continue
-		}
-		for _, form := range []string{secret, url.QueryEscape(secret)} {
-			text = strings.ReplaceAll(text, form, "***")
-		}
-	}
-	return text
+	return maskSecrets(text, append([]string{c.apiKey}, secrets...)...)
 }
 
 // send performs one Warmup request and returns the status and body.
