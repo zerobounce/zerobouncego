@@ -2,6 +2,7 @@ package zerobouncego
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -246,6 +247,42 @@ func TestEveryRequestAllowsLoopbackHTTP(t *testing.T) {
 					t.Fatal("no request reached the transport")
 				}
 			})
+		}
+	}
+}
+
+// A key with surrounding whitespace or a control character is refused by every
+// request function before anything is sent. The Warmup client checks its key
+// once, in NewWarmupClient (its key field cannot be set any other way), so its
+// methods are covered by that constructor check.
+func TestEveryRequestRejectsPaddedOrControlCharacterKey(t *testing.T) {
+	for _, key := range []string{" key", "key ", "\tkey", "key\n", "ke\x00y", "ke\x7fy", "ke\ry"} {
+		fake := useFake(t)
+		client, warmup := pointEverythingAt(t, "https://api.example.test")
+		Initialize(key)
+		client.APIKey = key
+		if _, err := NewWarmupClient(key, ""); err == nil || !strings.Contains(err.Error(), "surrounding whitespace or control characters") {
+			t.Fatalf("%q NewWarmupClient: err = %v", key, err)
+		}
+		swept := 0
+		for _, call := range publicRequestCalls(client, warmup) {
+			if strings.HasPrefix(call.name, "WarmupClient.") {
+				continue
+			}
+			swept++
+			t.Run(fmt.Sprintf("%q/%s", key, call.name), func(t *testing.T) {
+				fake.clear()
+				err := call.call()
+				if err == nil || !strings.Contains(err.Error(), "surrounding whitespace or control characters") {
+					t.Fatalf("err = %v, want the key refusal", err)
+				}
+				if n := fake.size(); n != 0 {
+					t.Fatalf("%d request(s) reached the transport", n)
+				}
+			})
+		}
+		if swept == 0 {
+			t.Fatal("no request functions swept")
 		}
 	}
 }
