@@ -289,6 +289,11 @@ func ErrorFromResponse(response *http.Response) error {
 		if len(responseBody) > 0 && strings.Contains(err.Error(), "not valid JSON") {
 			return statusError(response.StatusCode, err.Error())
 		}
+		// A body that could not be read is a transport failure: on a 2xx it
+		// carries no status.
+		if response.StatusCode < 300 {
+			return errors.New(redactKeys("server error: " + err.Error()))
+		}
 		return statusError(response.StatusCode, "server error: "+err.Error())
 	}
 	return statusError(response.StatusCode, messageFromBody(response.StatusCode, response.Header.Get("Content-Type"), string(responseBody)))

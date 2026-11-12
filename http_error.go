@@ -28,8 +28,9 @@ const maxJSONBodyBytes = 2 << 20
 //     error for address "all").
 //
 // A 2xx that is not an API response at all (an HTML page, an empty body,
-// non-JSON text) is a plain error there. The Warmup client returns a
-// ZBApiError for every failed response, whatever its status.
+// non-JSON text, a download with a JSON content type or an empty body) is a
+// ZBApiError too, with StatusCode set to that 2xx status. The Warmup client
+// returns a ZBApiError for every failed response, whatever its status.
 //
 // A transport failure such as a timeout, a body that cannot be read, and an
 // argument rejected before any request is sent are plain errors.
@@ -95,13 +96,13 @@ func redactKeys(message string) string {
 	return apiKeyParameter.ReplaceAllString(maskSecrets(message, keys...), "${1}***")
 }
 
-// statusError is the error for a response that is not a usable API result. An
-// HTTP error status (above 299) becomes a *ZBApiError carrying that status; a
-// 2xx keeps a plain error. The message text is the same either way, with the
-// API key masked (redactKeys).
+// statusError is the error for a response that is not a usable API result: a
+// *ZBApiError carrying the response's HTTP status, 2xx included (an HTML page
+// or non-JSON text on a 200 is still the server's answer), with the API key
+// masked (redactKeys).
 func statusError(statusCode int, message string) error {
 	message = redactKeys(message)
-	if statusCode > 299 {
+	if statusCode > 0 {
 		return &ZBApiError{StatusCode: statusCode, Message: message}
 	}
 	return errors.New(message)
@@ -342,6 +343,9 @@ func ensureJSONAPIBody(status int, contentType string, body []byte) error {
 	if trimmed[0] != '{' && trimmed[0] != '[' {
 		return statusError(status, messageFromBody(status, contentType, text))
 	}
+	if !json.Valid(body) {
+		return statusError(status, "ZeroBounce returned a response that is not valid JSON.")
+	}
 	// {"success": false, ...} on an HTTP 200 is a failure, not a result. The
 	// live API answers an unknown file id that way, with a 200.
 	if trimmed[0] == '{' {
@@ -393,7 +397,8 @@ func decodeNonMessageJSONBody(status int, contentType string, body []byte, dest 
 }
 
 func getFileBodyError(status int, contentType, body string) error {
-	if bodyLooksLikeHTML(body) || contentTypeIsHTML(contentType) || status != 200 {
+	// An empty 200 is not a result file: there is nothing to save.
+	if bodyLooksLikeHTML(body) || contentTypeIsHTML(contentType) || status != 200 || strings.TrimSpace(body) == "" {
 		return statusError(status, messageFromBody(status, contentType, body))
 	}
 	if shouldTreatGetFileBodyAsError(body, contentType) {
@@ -401,11 +406,8 @@ func getFileBodyError(status int, contentType, body string) error {
 		if message == "" || len(message) > 500 || bodyLooksLikeHTML(message) {
 			message = messageFromBody(status, contentType, body)
 		}
-		// A JSON error body is the API reporting a failure, so it carries the
-		// status like any other; text that is not JSON stays a plain error.
-		if json.Valid([]byte(strings.TrimSpace(body))) {
-			return apiError(status, message)
-		}
+		// A JSON error body, or a JSON content type on a download, is the API
+		// reporting a failure, so it carries the status like any other.
 		return statusError(status, message)
 	}
 	return nil

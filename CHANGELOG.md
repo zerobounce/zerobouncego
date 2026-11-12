@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `BulkValidationSubmitWithOptions`, `AiScoringFileSubmitWithOptions` and `GenericFileSubmitWithOptions`, which take a `*SendFileOptions`. `remove_duplicate` is sent only when `SendFileOptions.RemoveDuplicate` is set, so the API's default (`true`) applies otherwise; a nil `*SendFileOptions` sends neither.
+
+### Deprecated
+
+- `BulkValidationSubmit`, `AiScoringFileSubmit` and `GenericFileSubmit`. Their `remove_duplicate bool` cannot be left out, so they always send it (the README example passed `false`, which turned off the API's default duplicate removal). They still compile and send the value given; use the `...WithOptions` functions above.
+
 ### Fixed
+
+- The bulk downloads (`BulkValidationResult[WithOptions]`, `AiScoringResult[WithOptions]`, `GenericResultFetch[WithOptions]`, `BulkEmailFinderResult`, `BulkDomainSearchResult`) returned a nil error for an empty HTTP 200 body (or one of only whitespace), whatever its content type, and wrote nothing, so the caller was told an empty result file had been saved. It is now a `*ZBApiError` with `StatusCode` 200 and the message `Empty response from ZeroBounce (HTTP 200)`, and nothing is written. Affects 2.2.0 to 3.0.1.
+- A 2xx that is not an API response (a `text/html` page, an HTML body under any content type, text that is not JSON, JSON that does not parse, or a download sent with a JSON content type) was a plain `error` with no status on every call except the Warmup ones. It is now a `*ZBApiError` with `StatusCode` set to that 2xx status, with the same message as before; `ErrorFromResponse` does the same. A body that cannot be read on a 2xx is still a plain error. Code that treated "not a `*ZBApiError`" as "the API never answered" now sees these as API errors. `ListFilters` (2.2.0 to 3.0.1) and `DeleteInboxPlacementTest` (3.0.1) returned malformed JSON that starts with `{` or `[` (`{"success": tru`) as a success; it is now that error too, and on the other calls it carries the status instead of being a plain error. Affects 2.2.0 to 3.0.1.
+- A bulk base URL with more than one trailing slash (`SetURI("", "https://host/v2//")`, or `BULK_URI` set that way) sent the bulk email finder and domain search calls, the S3 and SFTP/FTP file jobs and, after `SetURI`, the Inbox Placement calls to `/v2/<path>` and the list evaluator to `/v2/v2/listevaluator`. Every trailing slash is now stripped before `/v2`. Affects 2.2.0 to 3.0.1.
 
 - `WarmupClient.AddSendingAccount` rejected a `ManagedSending["timezone_offset"]` that was not a Go `int` with `invalid parameter: timezone_offset (must be -11 to 14)`: `3.0` (the API docs' own example, and what a config decoded from JSON holds), a fractional offset such as `5.5`, an `int64` or a `json.Number`. It now accepts any Go numeric type and `json.Number` from -11 to 14, fractional included, and sends it unchanged; a value outside that range, NaN, an infinity or a non-number is rejected with `invalid parameter: timezone_offset (must be a number from -11 to 14)`. `ManagedSending["weekdays_only"]` must now be a `bool` and `ManagedSending["timezone"]` a `string`; anything else is rejected before the request (`"false"` was sent as a string). The documented `EmailContent` and `ManagedSending` keys are now listed in the `WarmupSendingAccountOptions` docs. Affects 2.2.0 to 3.0.1.
 - `WarmupClient.DownloadSeeds` and `DownloadStatistics` returned an HTML page (a `text/html` 200, or an HTML body under any content type) and a JSON body sent with a non-JSON content type as the CSV text. They now return a `*ZBApiError` with the status (200), like an empty body or a JSON content type already did. Affects 2.2.0 to 3.0.1.

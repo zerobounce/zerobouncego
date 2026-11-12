@@ -11,12 +11,12 @@ import (
 )
 
 // The keys the body-echo sweep sends: the package key, a Client's own key and
-// a Warmup key. Each has characters that URL-encode, so the raw and the
-// encoded form differ.
+// a Warmup key. Each has characters that URL-encode (/ + % ") and a quote
+// that JSON escapes, so the raw, URL-encoded and JSON-escaped forms differ.
 const (
-	echoPackageKey = "pk/echo+key1"
-	echoClientKey  = "ck/echo+key2"
-	echoWarmupKey  = "wk/echo+key3"
+	echoPackageKey = `pk/echo+"key%1`
+	echoClientKey  = `ck/echo+"key%2`
+	echoWarmupKey  = `wk/echo+"key%3`
 )
 
 // keyEchoTransport answers every request with a body that quotes the key the

@@ -2,9 +2,19 @@ package zerobouncego
 
 import "io"
 
-// BulkValidationSubmit - submit a file with emails for validation
+// BulkValidationSubmit - submit a file with emails for validation. It always
+// sends remove_duplicate as given.
+//
+// Deprecated: use BulkValidationSubmitWithOptions, which leaves
+// remove_duplicate to the API's default (true) unless you set it.
 func BulkValidationSubmit(csv_file CsvFile, remove_duplicate bool) (*FileValidationResponse, error) {
 	return GenericFileSubmit(csv_file, remove_duplicate, ENDPOINT_FILE_SEND)
+}
+
+// BulkValidationSubmitWithOptions - submit a file with emails for validation.
+// remove_duplicate is sent only when opts sets it.
+func BulkValidationSubmitWithOptions(csv_file CsvFile, opts *SendFileOptions) (*FileValidationResponse, error) {
+	return GenericFileSubmitWithOptions(csv_file, ENDPOINT_FILE_SEND, opts)
 }
 
 // BulkValidationFileStatus - check the percentage of completion of a file uploaded

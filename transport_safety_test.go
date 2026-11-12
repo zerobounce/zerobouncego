@@ -254,17 +254,17 @@ func TestEveryWarmupRequestRefusesARedirect(t *testing.T) {
 // network layer's own error echoes them, raw or URL-encoded.
 func TestWarmupErrorsNeverCarryTheKeyOrSMTPCredentials(t *testing.T) {
 	const (
-		key      = "wk/secret+key"
-		username = "smtp-user@example.com"
-		password = "p@ss word+1/x"
+		key      = `wk/se"cret+key%1`
+		username = `smtp-"user"@example.com`
+		password = `p@ss "word+1/x%`
 	)
 	secrets := []string{key, username, password}
 	var forms []string
 	for _, secret := range secrets {
-		forms = append(forms, secret, url.QueryEscape(secret))
+		forms = append(forms, secret, url.QueryEscape(secret), jsonQuoted(secret))
 	}
 	echo := strings.Join(forms, " | ")
-	quoted := strings.ReplaceAll(echo, `"`, `\"`)
+	quoted := jsonQuoted(echo)
 
 	cases := map[string]func(req *http.Request, body string) (*http.Response, error){
 		"error body": func(req *http.Request, _ string) (*http.Response, error) {
@@ -303,7 +303,7 @@ func TestWarmupErrorsNeverCarryTheKeyOrSMTPCredentials(t *testing.T) {
 				}
 				// Only the SMTP call is given the username and password to
 				// mask; for the rest just the key is a secret.
-				check := []string{key, url.QueryEscape(key)}
+				check := []string{key, url.QueryEscape(key), jsonQuoted(key)}
 				if strings.HasPrefix(call.name, "WarmupClient.TestSMTPConfiguration(") {
 					check = forms
 				}

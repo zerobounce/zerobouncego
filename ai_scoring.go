@@ -2,9 +2,19 @@ package zerobouncego
 
 import "io"
 
-// AiScoringSubmit - submit a file with emails for AI scoring
+// AiScoringFileSubmit - submit a file with emails for AI scoring. It always
+// sends remove_duplicate as given.
+//
+// Deprecated: use AiScoringFileSubmitWithOptions, which leaves
+// remove_duplicate to the API's default (true) unless you set it.
 func AiScoringFileSubmit(csv_file CsvFile, remove_duplicate bool) (*FileValidationResponse, error) {
 	return GenericFileSubmit(csv_file, remove_duplicate, ENDPOINT_SCORING_SEND)
+}
+
+// AiScoringFileSubmitWithOptions - submit a file with emails for AI scoring.
+// remove_duplicate is sent only when opts sets it.
+func AiScoringFileSubmitWithOptions(csv_file CsvFile, opts *SendFileOptions) (*FileValidationResponse, error) {
+	return GenericFileSubmitWithOptions(csv_file, ENDPOINT_SCORING_SEND, opts)
 }
 
 // BulkValidationFileStatus - check the percentage of completion of a file uploaded

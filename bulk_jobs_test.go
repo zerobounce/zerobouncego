@@ -544,7 +544,7 @@ func TestInboxPlacement200FailureBodies(t *testing.T) {
 	}{
 		{"error-only", "application/json", `{"error":"Invalid API key"}`, true, "Invalid API key"},
 		{"success-false", "application/json", `{"success":false,"message":"Test not found."}`, true, "Test not found."},
-		{"html", "text/html", `<html><head><title>Access denied</title></head><body>blocked</body></html>`, false,
+		{"html", "text/html", `<html><head><title>Access denied</title></head><body>blocked</body></html>`, true,
 			`ZeroBounce returned an HTML error page ("Access denied") instead of an API response.`},
 	}
 	Initialize("mock_key")

@@ -78,16 +78,22 @@ func publicRequestCalls(client *Client, warmup *WarmupClient) []requestCall {
 		{"ListFilters(post)", func() error { _, err := ListFilters(true); return err }},
 		{"DeleteFilter", func() error { _, err := DeleteFilter("allow", "email", email); return err }},
 		{"BulkValidationSubmit", func() error { _, err := BulkValidationSubmit(csvUpload(), false); return err }},
+		{"BulkValidationSubmitWithOptions", func() error { _, err := BulkValidationSubmitWithOptions(csvUpload(), nil); return err }},
 		{"BulkValidationFileStatus", func() error { _, err := BulkValidationFileStatus(fileID); return err }},
 		{"BulkValidationResult", func() error { return BulkValidationResult(fileID, sink) }},
 		{"BulkValidationResultWithOptions", func() error { return BulkValidationResultWithOptions(fileID, sink, nil) }},
 		{"BulkValidationFileDelete", func() error { _, err := BulkValidationFileDelete(fileID); return err }},
 		{"AiScoringFileSubmit", func() error { _, err := AiScoringFileSubmit(csvUpload(), false); return err }},
+		{"AiScoringFileSubmitWithOptions", func() error { _, err := AiScoringFileSubmitWithOptions(csvUpload(), nil); return err }},
 		{"AiScoringFileStatus", func() error { _, err := AiScoringFileStatus(fileID); return err }},
 		{"AiScoringResult", func() error { return AiScoringResult(fileID, sink) }},
 		{"AiScoringResultWithOptions", func() error { return AiScoringResultWithOptions(fileID, sink, nil) }},
 		{"AiScoringFileDelete", func() error { _, err := AiScoringFileDelete(fileID); return err }},
 		{"GenericFileSubmit", func() error { _, err := GenericFileSubmit(csvUpload(), false, ENDPOINT_FILE_SEND); return err }},
+		{"GenericFileSubmitWithOptions", func() error {
+			_, err := GenericFileSubmitWithOptions(csvUpload(), ENDPOINT_FILE_SEND, nil)
+			return err
+		}},
 		{"GenericFileStatusCheck", func() error { _, err := GenericFileStatusCheck(fileID, ENDPOINT_FILE_STATUS); return err }},
 		{"GenericResultFetch", func() error { return GenericResultFetch(fileID, ENDPOINT_FILE_RESULT, sink) }},
 		{"GenericResultFetchWithOptions", func() error {

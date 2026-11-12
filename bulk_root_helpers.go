@@ -9,15 +9,16 @@ import (
 	"strings"
 )
 
-// bulkAPIRoot derives https://bulkapi.zerobounce.net from BULK_URI (strips trailing /v2).
+// bulkAPIRoot derives https://bulkapi.zerobounce.net from BULK_URI (strips
+// every trailing "/", then a trailing /v2).
 func bulkAPIRoot() string {
-	trimmed := strings.TrimSuffix(strings.TrimSpace(BULK_URI), "/")
+	trimmed := strings.TrimRight(strings.TrimSpace(BULK_URI), "/")
 	trimmed = strings.TrimSuffix(trimmed, "/v2")
-	return strings.TrimSuffix(trimmed, "/")
+	return strings.TrimRight(trimmed, "/")
 }
 
 func bulkV2Base() string {
-	return strings.TrimSuffix(strings.TrimSpace(BULK_URI), "/")
+	return strings.TrimRight(strings.TrimSpace(BULK_URI), "/")
 }
 
 func emailFinderBaseURL() string {

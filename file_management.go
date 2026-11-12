@@ -185,11 +185,34 @@ func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*Csv
 	return csv_file, nil
 }
 
-// GenericFileSubmit - submits a csv file to an operation represented by the given endpoint
+// SendFileOptions holds the optional sendfile fields that are not part of
+// CsvFile. A nil field is not sent, so the API's default applies.
+type SendFileOptions struct {
+	// RemoveDuplicate is sent as remove_duplicate when set. The API's
+	// default is true.
+	RemoveDuplicate *bool
+}
+
+// GenericFileSubmit - submits a csv file to an operation represented by the
+// given endpoint. It always sends remove_duplicate as given.
+//
+// Deprecated: use GenericFileSubmitWithOptions, which leaves
+// remove_duplicate to the API's default (true) unless you set it.
 func GenericFileSubmit(
 	csv_file CsvFile,
 	remove_duplicate bool,
 	endpoint string,
+) (*FileValidationResponse, error) {
+	return GenericFileSubmitWithOptions(csv_file, endpoint, &SendFileOptions{RemoveDuplicate: &remove_duplicate})
+}
+
+// GenericFileSubmitWithOptions - submits a csv file to an operation
+// represented by the given endpoint. remove_duplicate is sent only when opts
+// sets it.
+func GenericFileSubmitWithOptions(
+	csv_file CsvFile,
+	endpoint string,
+	opts *SendFileOptions,
 ) (*FileValidationResponse, error) {
 	if err := packageConfig().requireKey(); err != nil {
 		return nil, err
@@ -202,7 +225,9 @@ func GenericFileSubmit(
 
 	// MULTI-PART FORM PREPARATION
 	multipart_writer := multipart.NewWriter(multipart_buffer)
-	multipart_writer.WriteField("remove_duplicate", fmt.Sprintf("%v", remove_duplicate))
+	if opts != nil && opts.RemoveDuplicate != nil {
+		multipart_writer.WriteField("remove_duplicate", fmt.Sprintf("%v", *opts.RemoveDuplicate))
+	}
 	validationSendfile := endpoint == ENDPOINT_FILE_SEND
 	error_ = csv_file.FillMultipartForm(multipart_writer, validationSendfile)
 	if error_ != nil {

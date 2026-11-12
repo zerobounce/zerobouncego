@@ -291,12 +291,13 @@ func main() {
 
 #### Errors
 
-Every failed call returns an `error`. When the API answered with an HTTP status
-above 299 (a refused redirect included), or with a 2xx whose JSON body reports a
-failure, that error is a `*zerobouncego.ZBApiError` carrying `StatusCode`, so a
-Cloudflare 403 can be told apart from an API 400 or 404 or a 429. A 2xx HTML
-page, an empty body, a timeout, and an argument rejected before the request are
-plain errors.
+Every failed call returns an `error`. When the API answered (an HTTP status
+above 299, a refused redirect included, or a 2xx whose body is not a usable
+result: a JSON body reporting a failure, an HTML page, an empty body, non-JSON
+text, or a download with a JSON content type), that error is a
+`*zerobouncego.ZBApiError` carrying `StatusCode`, so a Cloudflare 403 can be
+told apart from an API 400 or 404 or a 429. A timeout, a body that could not be
+read, and an argument rejected before the request are plain errors.
 
 ```go
 package main
@@ -390,7 +391,9 @@ func main() {
 		// ReturnURL: "https://example.com/callback", // optional
 		// AllowPhase2: &trueVal, // optional *bool; validation send only (define var trueVal = true)
 	}
-	submit_response, error_ := zerobouncego.BulkValidationSubmit(csv_file, false)
+	// remove_duplicate is sent only when set; the API's default is true.
+	// Pass &zerobouncego.SendFileOptions{RemoveDuplicate: &keep} to choose.
+	submit_response, error_ := zerobouncego.BulkValidationSubmitWithOptions(csv_file, nil)
 	if error_ != nil {
 		fmt.Println("error while submitting data: ", error_.Error())
 		return
@@ -502,7 +505,7 @@ func main() {
 		File: file, HasHeaderRow: false, EmailAddressColumn: 1, FileName: "emails.csv",
 		// ReturnURL is optional for scoring send as well when supported by the API.
 	}
-	submit_response, error_ := zerobouncego.AiScoringFileSubmit(csv_file, false)
+	submit_response, error_ := zerobouncego.AiScoringFileSubmitWithOptions(csv_file, nil)
 	if error_ != nil {
 		fmt.Println("error while submitting data: ", error_.Error())
 		return

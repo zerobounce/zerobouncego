@@ -138,16 +138,15 @@ func TestErrorFromResponseCarriesStatus(t *testing.T) {
 	}
 }
 
-// A 2xx HTML page is still an error, but it carries no HTTP error status, so
-// it stays a plain error: the godoc promises *ZBApiError only for statuses
-// above 299 and for a 2xx JSON body that reports a failure.
-func TestHTMLOn200IsAPlainError(t *testing.T) {
+// A 2xx HTML page is an error carrying its status: it is the server's
+// answer, just not an API result. It used to be a plain error with no status.
+func TestHTMLOn200IsZBApiErrorWithStatus200(t *testing.T) {
 	withStatusResponder(t, 200, "text/html", cloudflareBlockPage)
 	_, err := GetCredits()
 	assertShortError(t, err)
 	var apiErr *ZBApiError
-	if errors.As(err, &apiErr) {
-		t.Fatalf("unexpected *ZBApiError: %+v", apiErr)
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 200 {
+		t.Fatalf("got %T %v, want a *ZBApiError with status 200", err, err)
 	}
 }
 
