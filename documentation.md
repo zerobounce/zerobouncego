@@ -799,9 +799,37 @@ All 26 methods:
 | Utilities | `CheckDomainDmarc` (takes an email address), `TestSMTPConfiguration` |
 
 `AddSendingAccount` takes an onboarding model from `WarmupOnboardingModels`
-(`self_managed`, which needs `EngagementRuleID`, or `zb_managed`); for
-`zb_managed`, `EmailContent["types_of_emails"]` is a `[]string` drawn from
-`WarmupEmailTypes`. `DeleteSendingAccount` cannot be undone.
+(`self_managed`, which needs `EngagementRuleID`, or `zb_managed`). For
+`zb_managed`, `EmailContent` and `ManagedSending` are sent as given, with these
+documented keys:
+
+- `EmailContent`: `company_name`, `company_website`, `company_description`,
+  `types_of_emails` (a `[]string` drawn from `WarmupEmailTypes`) and
+  `example_email`.
+- `ManagedSending`: `weekdays_only` (a `bool`), `timezone` (a `string`, e.g.
+  `"Europe/Bucharest"`), `timezone_offset` (any Go number from -11 to 14,
+  fractional allowed, e.g. `5.5`) and `warmup_start_date` (a `time.Time` or
+  `"YYYY-MM-DD"`).
+
+```go
+_, err = warmup.AddSendingAccount("sender@example.com", "zb_managed",
+	&zerobouncego.WarmupSendingAccountOptions{
+		EmailContent: map[string]interface{}{
+			"company_name":    "Acme",
+			"company_website": "https://acme.example",
+			"types_of_emails": []string{"newsletter"},
+		},
+		ManagedSending: map[string]interface{}{
+			"weekdays_only":   true,
+			"timezone":        "Asia/Kolkata",
+			"timezone_offset": 5.5,
+		},
+	})
+```
+
+`DownloadSeeds` and `DownloadStatistics` return a `*ZBApiError` instead of the
+CSV when the answer is empty, JSON or an HTML page. `DeleteSendingAccount`
+cannot be undone.
 
 #### Testing
 

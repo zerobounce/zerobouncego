@@ -371,3 +371,43 @@ func TestWarmupJSONInPlaceOfACSVIsAnError(t *testing.T) {
 		})
 	}
 }
+
+// A CSV download is an error, not the file, when the 200 is an HTML page (by
+// content type or by body), a JSON body under a CSV content type, or empty.
+// Only a JSON content type and an empty body were checked, so an HTML page or
+// a JSON error sent as text/csv came back as the CSV.
+func TestWarmupHTMLJSONOrEmptyBodyInPlaceOfACSVIsAnError(t *testing.T) {
+	page := `<!DOCTYPE html><html><head><title>Just a moment</title></head><body></body></html>`
+	cases := []struct{ name, contentType, body string }{
+		{"html content type", "text/html; charset=UTF-8", page},
+		{"html body as csv", "text/csv", page},
+		{"json object as csv", "text/csv", `{"message":"No seeds for this team."}`},
+		{"json list as csv", "text/plain", `["No seeds for this team."]`},
+		{"empty", "text/csv", "  \n"},
+	}
+	for _, tc := range cases {
+		responder, warmup := useWarmupResponder(t, "warmup-key", func(req *http.Request, _ string) (*http.Response, error) {
+			return textResponse(req, 200, tc.contentType, tc.body), nil
+		})
+		byName := map[string]requestCall{}
+		for _, call := range warmupCalls(warmup) {
+			byName[strings.TrimPrefix(call.name, "WarmupClient.")] = call
+		}
+		for _, name := range warmupCSVMethods(t) {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				call, ok := byName[name]
+				if !ok {
+					t.Fatalf("%s is missing from publicRequestCalls", name)
+				}
+				err := call.call()
+				if len(responder.take()) != 1 {
+					t.Fatal("want one request")
+				}
+				var apiErr *ZBApiError
+				if !errors.As(err, &apiErr) || apiErr.StatusCode != 200 {
+					t.Fatalf("err = %v, want a *ZBApiError with status 200", err)
+				}
+			})
+		}
+	}
+}

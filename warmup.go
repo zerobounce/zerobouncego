@@ -171,7 +171,12 @@ func (c *WarmupClient) csv(path string, params url.Values) (string, error) {
 		return "", err
 	}
 	contentType := strings.ToLower(header.Get("Content-Type"))
-	if len(bytes.TrimSpace(payload)) == 0 || strings.Contains(contentType, CONTENT_TYPE_JSON) {
+	// Not a CSV: an empty body, JSON (by content type, or an object or list
+	// whatever the content type) or an HTML page (by content type or body).
+	trimmed := bytes.TrimSpace(payload)
+	jsonBody := len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') && json.Valid(trimmed)
+	if len(trimmed) == 0 || strings.Contains(contentType, CONTENT_TYPE_JSON) || jsonBody ||
+		contentTypeIsHTML(contentType) || bodyLooksLikeHTML(string(payload)) {
 		return "", &ZBApiError{
 			StatusCode: status,
 			Message:    c.redact(warmupMessageFromBody(payload, status)),
@@ -194,6 +199,41 @@ func warmupInRange(value, low, high int, name string) error {
 		return fmt.Errorf("invalid parameter: %s (must be %d to %d)", name, low, high)
 	}
 	return nil
+}
+
+// warmupNumber reads any Go numeric value, or a json.Number, as a float64.
+// NaN and the infinities come back too; the caller's range check rejects them.
+func warmupNumber(value interface{}) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), true
+	case int8:
+		return float64(typed), true
+	case int16:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case uint:
+		return float64(typed), true
+	case uint8:
+		return float64(typed), true
+	case uint16:
+		return float64(typed), true
+	case uint32:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	case float32:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	case json.Number:
+		parsed, err := typed.Float64()
+		return parsed, err == nil
+	}
+	return 0, false
 }
 
 // WarmupDate is a date for the API: a time.Time or a YYYY-MM-DD string.
@@ -254,8 +294,15 @@ type WarmupSendingAccountOptions struct {
 	EngagementRuleID *int
 	// IgnoreConflict is self-managed only: do not fail when already registered.
 	IgnoreConflict *bool
-	// EmailContent and ManagedSending are zb_managed only.
-	EmailContent   map[string]interface{}
+	// EmailContent and ManagedSending are zb_managed only, and are sent as
+	// given. The documented EmailContent keys are company_name,
+	// company_website, company_description, types_of_emails ([]string of
+	// transactional, newsletter, marketing) and example_email.
+	EmailContent map[string]interface{}
+	// The documented ManagedSending keys are weekdays_only (bool), timezone
+	// (string, e.g. "Europe/Bucharest"), timezone_offset (any Go number, -11
+	// to 14 hours, fractional allowed, e.g. 5.5) and warmup_start_date (a
+	// time.Time or a YYYY-MM-DD string).
 	ManagedSending map[string]interface{}
 }
 
@@ -327,9 +374,19 @@ func (c *WarmupClient) AddSendingAccount(fromAddress, onboardingModel string, op
 			sending[key] = value
 		}
 		if offset, found := sending["timezone_offset"]; found {
-			value, ok := offset.(int)
-			if !ok || value < -11 || value > 14 {
-				return nil, fmt.Errorf("invalid parameter: timezone_offset (must be -11 to 14)")
+			value, ok := warmupNumber(offset)
+			if !ok || !(value >= -11 && value <= 14) {
+				return nil, fmt.Errorf("invalid parameter: timezone_offset (must be a number from -11 to 14)")
+			}
+		}
+		if weekdays, found := sending["weekdays_only"]; found {
+			if _, ok := weekdays.(bool); !ok {
+				return nil, fmt.Errorf("invalid parameter: weekdays_only (must be true or false)")
+			}
+		}
+		if timezone, found := sending["timezone"]; found {
+			if _, ok := timezone.(string); !ok {
+				return nil, fmt.Errorf("invalid parameter: timezone (must be a string, e.g. Europe/Bucharest)")
 			}
 		}
 		if start, found := sending["warmup_start_date"]; found && start != nil {

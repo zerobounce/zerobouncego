@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `WarmupClient.AddSendingAccount` rejected a `ManagedSending["timezone_offset"]` that was not a Go `int` with `invalid parameter: timezone_offset (must be -11 to 14)`: `3.0` (the API docs' own example, and what a config decoded from JSON holds), a fractional offset such as `5.5`, an `int64` or a `json.Number`. It now accepts any Go numeric type and `json.Number` from -11 to 14, fractional included, and sends it unchanged; a value outside that range, NaN, an infinity or a non-number is rejected with `invalid parameter: timezone_offset (must be a number from -11 to 14)`. `ManagedSending["weekdays_only"]` must now be a `bool` and `ManagedSending["timezone"]` a `string`; anything else is rejected before the request (`"false"` was sent as a string). The documented `EmailContent` and `ManagedSending` keys are now listed in the `WarmupSendingAccountOptions` docs. Affects 2.2.0 to 3.0.1.
+- `WarmupClient.DownloadSeeds` and `DownloadStatistics` returned an HTML page (a `text/html` 200, or an HTML body under any content type) and a JSON body sent with a non-JSON content type as the CSV text. They now return a `*ZBApiError` with the status (200), like an empty body or a JSON content type already did. Affects 2.2.0 to 3.0.1.
+
 ### Security
 
 - An error built from a response body no longer carries the API key. A body that echoed the key (`{"error": "Invalid API key <key>"}` or `{"success": false, "message": "... <key>"}` on an HTTP 200, a 400 quoting the request URL with `?api_key=<key>`, a JSON error on a 4xx/5xx, a getfile JSON error, `ValidateBatch`'s error for address `all`) was passed on as the error text or `ZBApiError.Message` by every call except the Warmup ones, and by `ErrorFromResponse`. Every key a request has been sent with is now masked as `***` in such a message, as sent, URL-encoded and JSON-escaped, and so is any `api_key=` value. The Warmup client already masked its key and shares the same masking now.

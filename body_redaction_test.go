@@ -89,6 +89,16 @@ func TestEveryRequestRedactsTheKeyFromBodyMessages(t *testing.T) {
 		"400 JSON error": func(req *http.Request, key string) *http.Response {
 			return echoResponse(req, 400, CONTENT_TYPE_JSON, `{"error":"Invalid API key `+jsonQuoted(key)+`"}`)
 		},
+		// ValidateBatch's account-level error: an error for the address
+		// "all" on an HTTP 200. Only the batch calls fail on it.
+		"200 batch all": func(req *http.Request, key string) *http.Response {
+			return echoResponse(req, 200, CONTENT_TYPE_JSON,
+				`{"email_batch":[],"errors":[{"error":"Invalid API key `+jsonQuoted(key)+`","email_address":"all"}]}`)
+		},
+	}
+	// The calls that must fail on a case, where it is not most of them.
+	mustFail := map[string][]string{
+		"200 batch all": {"ValidateBatch", "ValidateBatchWithOptions"},
 	}
 	var forms []string
 	for _, key := range []string{echoPackageKey, echoClientKey, echoWarmupKey} {
@@ -106,6 +116,7 @@ func TestEveryRequestRedactsTheKeyFromBodyMessages(t *testing.T) {
 			t.Fatal(err)
 		}
 		failed := 0
+		failedCalls := map[string]bool{}
 		calls := publicRequestCalls(client, warmup)
 		for _, call := range calls {
 			t.Run(name+"/"+call.name, func(t *testing.T) {
@@ -118,6 +129,7 @@ func TestEveryRequestRedactsTheKeyFromBodyMessages(t *testing.T) {
 					return // a result, not an error: nothing to leak
 				}
 				failed++
+				failedCalls[call.name] = true
 				for _, text := range errorTexts(err) {
 					for _, form := range forms {
 						if strings.Contains(text, form) {
@@ -126,6 +138,14 @@ func TestEveryRequestRedactsTheKeyFromBodyMessages(t *testing.T) {
 					}
 				}
 			})
+		}
+		if names, ok := mustFail[name]; ok {
+			for _, callName := range names {
+				if !failedCalls[callName] {
+					t.Fatalf("%s: %s returned no error, so nothing was checked", name, callName)
+				}
+			}
+			continue
 		}
 		// Most calls fail on each of these bodies; if none did, the sweep
 		// checked nothing.
