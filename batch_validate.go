@@ -27,6 +27,23 @@ type ValidateBatchResponse struct {
 	Errors     []EmailBatchError  `json:"errors"`
 }
 
+// hasRequiredFields refuses a batch answer with a row that lacks its address
+// and status strings (see ValidateResponse.hasRequiredFields).
+func (r *ValidateBatchResponse) hasRequiredFields(body []byte) bool {
+	var rows struct {
+		EmailBatch []validateRequiredFields `json:"email_batch"`
+	}
+	if json.Unmarshal(body, &rows) != nil {
+		return false
+	}
+	for _, row := range rows.EmailBatch {
+		if !row.complete() {
+			return false
+		}
+	}
+	return true
+}
+
 // ValidateBatchOptions optional body fields for POST /validatebatch.
 type ValidateBatchOptions struct {
 	Timeout      *int

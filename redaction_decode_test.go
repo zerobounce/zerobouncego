@@ -218,8 +218,10 @@ func TestEveryRequestKeepsEveryEncodingOfTheKeyOutOfItsError(t *testing.T) {
 // secret behind exactly one kind of escape that only that step undoes, and
 // none of them is a spelling maskSecrets generates, so only the decode check
 // can drop it. Removing a step, its lower-case hex, its surrogate pairs, or a
-// layer of depth leaks the secret; a NUL or %00 before it does not end the
-// check, and an invalid UTF-8 run before it does not stop the percent decoder.
+// layer of depth leaks the secret; each UTF-8 sequence length (2, 3 and 4
+// bytes) is covered behind the percent and the JSON step. A NUL or %00
+// before it does not end the check, and an invalid UTF-8 run before it does
+// not stop the percent decoder.
 func TestEachDecodeStepOfTheSecretCheckIsNeeded(t *testing.T) {
 	cases := []struct{ name, secret, text string }{
 		// '+' stays a plus: only percent-decoding without + as space works.
@@ -227,6 +229,12 @@ func TestEachDecodeStepOfTheSecretCheckIsNeeded(t *testing.T) {
 		{"percent, upper-case hex", "k+y/z", "echo k+y%2Fz end"},
 		// A space sent as +: only percent-decoding with + as space works.
 		{"percent, + as space", "k y/z", "echo k+y%2fz end"},
+		// Each UTF-8 sequence length behind the percent step (lower-case hex,
+		// which maskSecrets does not generate) and behind the JSON step.
+		{"percent, 2-byte UTF-8", "k+y\u00e9z", "echo k+y%c3%a9z end"},
+		{"percent, 3-byte UTF-8", "k+y\u20acz", "echo k+y%e2%82%acz end"},
+		{"percent, 4-byte UTF-8", "k+y\U0001F600z", "echo k+y%f0%9f%98%80z end"},
+		{`JSON \uXXXX, 3-byte UTF-8`, "k\u20acy", `echo k\u20acy end`},
 		{"JSON escape", `k"y`, `echo k\"y end`},
 		{`JSON \/`, "k/y", `echo k\/y end`},
 		{`JSON \uXXXX`, "k/y", `echo k\u002fy end`},

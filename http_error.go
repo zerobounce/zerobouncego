@@ -582,10 +582,36 @@ func decodeJSONBody(status int, contentType string, body []byte, dest interface{
 	if _, raw := dest.(*interface{}); !raw && string(bytes.Trim(body, " \t\r\n")) == "null" {
 		return statusError(status, unexpectedJSONShapeMessage)
 	}
+	// encoding/json already refuses a field of another JSON type; a result
+	// with fields its call cannot answer without also checks those are there.
 	if err := json.Unmarshal(body, dest); err != nil {
 		return statusError(status, unexpectedJSONShapeMessage)
 	}
+	if checked, ok := dest.(requiredFieldsChecker); ok && !checked.hasRequiredFields(body) {
+		return statusError(status, unexpectedJSONShapeMessage)
+	}
 	return nil
+}
+
+// requiredFieldsChecker is a typed result with fields its call cannot answer
+// without (standard.md §3, "field types are part of the shape"). body is the
+// JSON the result was decoded from, already known to decode into it.
+type requiredFieldsChecker interface {
+	hasRequiredFields(body []byte) bool
+}
+
+// validateRequiredFields are the fields a validate result cannot do without.
+// A pointer stays nil when the key is missing or null.
+type validateRequiredFields struct {
+	Address *string `json:"address"`
+	Status  *string `json:"status"`
+	Message *string `json:"Message"`
+}
+
+// complete reports whether a validate result has its address and status, or
+// is the greylist answer, which carries only "Message".
+func (f validateRequiredFields) complete() bool {
+	return (f.Address != nil && f.Status != nil) || f.Message != nil
 }
 
 // decodeNonMessageJSONBody is decodeJSONBody for a call whose result is

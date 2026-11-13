@@ -1,6 +1,7 @@
 package zerobouncego
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -15,6 +16,23 @@ type CreditsResponse struct {
 	CreditsRaw string `json:"Credits"`
 }
 
+// hasRequiredFields refuses a getcredits answer whose Credits is missing,
+// null or not a string holding an integer ("-1" is the documented answer for
+// a dead key and stays a result), so Credits() never invents the -1.
+func (c *CreditsResponse) hasRequiredFields([]byte) bool {
+	_, err := strconv.Atoi(c.CreditsRaw)
+	return err == nil
+}
+
+// hasRequiredFields refuses a validate answer without address and status
+// strings, unless it is the greylist {"Message": ...} answer.
+func (v *ValidateResponse) hasRequiredFields(body []byte) bool {
+	var fields validateRequiredFields
+	return json.Unmarshal(body, &fields) == nil && fields.complete()
+}
+
+// Credits is the balance; -1 is the API's answer for an invalid key. A
+// response from GetCredits always holds an integer (anything else is an error).
 func (c *CreditsResponse) Credits() int {
 	amount, error_ := strconv.Atoi(c.CreditsRaw)
 	if error_ != nil {
