@@ -20,7 +20,7 @@ func TestEveryTypedCallRefusesJSONOfTheWrongShape(t *testing.T) {
 	http.DefaultTransport = fake
 	client, warmup := pointEverythingAt(t, "https://api.example.test")
 	calls := publicRequestCalls(client, warmup)
-	typed := 0
+	typed, lists := 0, 0
 	for _, call := range calls {
 		if downloads[call.name] || strings.HasPrefix(call.name, "WarmupClient.Download") {
 			continue
@@ -30,7 +30,19 @@ func TestEveryTypedCallRefusesJSONOfTheWrongShape(t *testing.T) {
 			continue // raw JSON: any JSON value is the result
 		}
 		typed++
-		for _, body := range []string{`null`, `0`, `true`, `"x"`, `[1]`, ` null `} {
+		// A JSON array is never read positionally into a result object: [],
+		// ["x"] and a positional array are refused by every call whose result
+		// is an object. A call that takes [] returns a list, so it must
+		// refuse an object ({}) instead.
+		refused := []string{`null`, `0`, `true`, `"x"`, `[1]`, ` null `, `["x"]`, `["a@example.com",10]`, `[true,"3"]`}
+		fake.body = `[]`
+		if call.call() == nil {
+			lists++
+			refused = append(refused, `{}`)
+		} else {
+			refused = append(refused, `[]`)
+		}
+		for _, body := range refused {
 			fake.body = body
 			err := call.call()
 			var apiErr *ZBApiError
@@ -39,7 +51,7 @@ func TestEveryTypedCallRefusesJSONOfTheWrongShape(t *testing.T) {
 			}
 		}
 	}
-	if typed < 50 {
-		t.Fatalf("only %d typed calls", typed)
+	if typed < 50 || lists > 2 {
+		t.Fatalf("%d typed calls, %d of them taking a list", typed, lists)
 	}
 }

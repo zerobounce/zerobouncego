@@ -10,8 +10,8 @@ import (
 
 // Field types are part of the shape (standard.md §3): on a typed call a field
 // of the wrong JSON type is a *ZBApiError with the 2xx status, never a result
-// with a zero or sentinel value. getcredits must carry Credits as a JSON
-// string holding an integer; validate (and each validatebatch row) must carry
+// with a zero or sentinel value. getcredits must carry Credits as an integer,
+// either a JSON string holding one or a JSON integer; validate (and each validatebatch row) must carry
 // address and status as strings, except the greylist {"Message": ...} answer.
 
 // fieldTypeCalls picks the getcredits and validate calls out of the complete
@@ -76,7 +76,11 @@ const docsValidateResponse = `{
 	"processed_at": "2017-04-01 02:48:02.592"
 }`
 
-func TestCreditsMustBeAStringHoldingAnInteger(t *testing.T) {
+// docsCreditsResponse is zerobounce.net's own getcredits example, verbatim
+// (v2-credit-balance, "Response"): Credits as a JSON integer.
+const docsCreditsResponse = `{"Credits":2375323}`
+
+func TestCreditsMustBeAnIntegerAsAStringOrANumber(t *testing.T) {
 	useFake(t)
 	fake := &fixedBodyTransport{}
 	http.DefaultTransport = fake
@@ -84,24 +88,37 @@ func TestCreditsMustBeAStringHoldingAnInteger(t *testing.T) {
 	credits, _, _ := fieldTypeCalls(t, client, warmup)
 	for _, call := range credits {
 		for _, body := range []string{
-			`{}`, `{"Credits":null}`, `{"Credits":true}`, `{"Credits":5}`, `{"Credits":"abc"}`,
+			`{}`, `{"Credits":null}`, `{"Credits":true}`, `{"Credits":"abc"}`,
 			`{"Credits":"5.0"}`, `{"Credits":""}`, `{"Credits":" 5"}`, `{"Credits":{}}`, `{"other":"5"}`,
+			`{"Credits":5.5}`, `{"Credits":5.0}`, `{"Credits":1e3}`, `{"Credits":-0.5}`, `{"Credits":[]}`, `{"Credits":[5]}`,
+			`{"Credits":"99999999999999999999"}`, `{"Credits":99999999999999999999}`,
 		} {
 			expectStatus200Error(t, call, fake, body)
 		}
-		for _, body := range []string{`{"Credits":"2375323"}`, `{"Credits":"-1"}`, `{"Credits":"0"}`} {
+		for _, body := range []string{
+			docsCreditsResponse, `{"Credits":"2375323"}`, `{"Credits":"-1"}`, `{"Credits":"0"}`,
+			`{"Credits":-1}`, `{"Credits":0}`, `{"Credits": 12345 }`,
+		} {
 			expectAccepted(t, call, fake, body)
 		}
 	}
 
+	for body, want := range map[string]int{
+		`{"Credits":"-1"}`: -1, `{"Credits":"12345"}`: 12345, docsCreditsResponse: 2375323, `{"Credits":-1}`: -1,
+	} {
+		fake.body = body
+		response, err := GetCredits()
+		if err != nil || response.Credits() != want {
+			t.Fatalf("GetCredits %s: %+v, %v", body, response, err)
+		}
+	}
 	fake.body = `{"Credits":"-1"}`
-	response, err := GetCredits()
-	if err != nil || response.Credits() != -1 || response.CreditsRaw != "-1" {
+	if response, err := GetCredits(); err != nil || response.CreditsRaw != "-1" {
 		t.Fatalf("GetCredits -1: %+v, %v", response, err)
 	}
-	fake.body = `{"Credits":"12345"}`
-	if response, err = GetCredits(); err != nil || response.Credits() != 12345 {
-		t.Fatalf("GetCredits 12345: %+v, %v", response, err)
+	fake.body = docsCreditsResponse
+	if response, err := GetCredits(); err != nil || response.CreditsRaw != "2375323" {
+		t.Fatalf("GetCredits docs example: %+v, %v", response, err)
 	}
 }
 
@@ -137,8 +154,12 @@ func TestValidateAddressAndStatusMustBeStrings(t *testing.T) {
 		}
 	}
 	for _, call := range batch {
-		for _, row := range refused[:7] {
+		// Every row needs its address and status, and a row that is not an
+		// object at all is refused too.
+		rows := append(append([]string{}, refused[:7]...), `5`, `null`, `"x"`, `[]`, `true`)
+		for _, row := range rows {
 			expectStatus200Error(t, call, fake, `{"email_batch":[`+row+`],"errors":[]}`)
+			expectStatus200Error(t, call, fake, `{"email_batch":[`+docsValidateResponse+`,`+row+`],"errors":[]}`)
 		}
 		expectAccepted(t, call, fake, `{"email_batch":[`+docsValidateResponse+`],"errors":[]}`)
 	}

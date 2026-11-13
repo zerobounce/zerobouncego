@@ -131,6 +131,24 @@ type FileValidationResponse struct {
 	FileId   string      `json:"file_id"`
 }
 
+// hasRequiredFields refuses a "message" that is neither a string nor a list
+// of strings (the documented shapes), so a field of another JSON type is an
+// error rather than a result.
+func (r *FileValidationResponse) hasRequiredFields([]byte) bool {
+	switch message := r.Message.(type) {
+	case nil, string:
+		return true
+	case []interface{}:
+		for _, item := range message {
+			if _, ok := item.(string); !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 // BulkValidationFileStatus - response payload after a file status check
 type FileStatusResponse struct {
 	Success            bool    `json:"success"`

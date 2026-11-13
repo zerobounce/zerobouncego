@@ -2,6 +2,7 @@ package zerobouncego
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -16,9 +17,38 @@ type CreditsResponse struct {
 	CreditsRaw string `json:"Credits"`
 }
 
+// UnmarshalJSON reads Credits as the live API sends it, a JSON string holding
+// an integer ("-1", "12345"), or as a JSON integer, as zerobounce.net's own
+// example {"Credits":2375323} shows. CreditsRaw holds the integer's text in
+// both cases. Any other JSON type, or a number that is not an integer
+// (5.5, 5.0, 1e3), is an error.
+func (c *CreditsResponse) UnmarshalJSON(data []byte) error {
+	var fields struct {
+		Credits json.RawMessage `json:"Credits"`
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	raw := fields.Credits
+	switch {
+	case len(raw) == 0 || string(raw) == "null":
+		// Missing or null: left as it is; hasRequiredFields refuses it.
+		return nil
+	case raw[0] == '"':
+		return json.Unmarshal(raw, &c.CreditsRaw)
+	case raw[0] == '-' || (raw[0] >= '0' && raw[0] <= '9'):
+		// A JSON number; hasRequiredFields refuses one that is not an
+		// integer in range (5.5, 5.0, 1e3).
+		c.CreditsRaw = string(raw)
+		return nil
+	default:
+		return errors.New("Credits is neither a string nor a number")
+	}
+}
+
 // hasRequiredFields refuses a getcredits answer whose Credits is missing,
-// null or not a string holding an integer ("-1" is the documented answer for
-// a dead key and stays a result), so Credits() never invents the -1.
+// null or not an integer ("-1" is the documented answer for a dead key and
+// stays a result), so Credits() never invents the -1.
 func (c *CreditsResponse) hasRequiredFields([]byte) bool {
 	_, err := strconv.Atoi(c.CreditsRaw)
 	return err == nil
