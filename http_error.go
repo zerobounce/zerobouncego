@@ -428,8 +428,9 @@ func errorOnlyMessage(object map[string]interface{}) string {
 }
 
 // messageOnlyBody reports whether a JSON body is nothing but a message: an
-// object with no "success" field whose keys are all message keys, at least
-// one a non-empty string. Only for calls whose result is never a bare
+// object with no "success" field whose keys are all message keys. The keys
+// decide, whatever the message's value (a string, blank, null or a list), since
+// no result object has these keys. Only for calls whose result is never a bare
 // message. LIVE: guessformat answers an invalid or drained key with an HTTP
 // 200 and {"Message": "Invalid API key or your account ran out of credits"}.
 // validate is not one of them: a repeated greylist validate answers with a
@@ -454,7 +455,7 @@ func messageOnlyBody(body []byte) bool {
 			return false
 		}
 	}
-	return apiErrorField(object, messageKeys) != ""
+	return true
 }
 
 func apiErrorField(object map[string]interface{}, keys []string) string {
