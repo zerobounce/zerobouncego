@@ -77,7 +77,7 @@ func TestMessageOnlyBodiesAreErrorsOnEveryTypedCall(t *testing.T) {
 	fake := &fixedBodyTransport{}
 	http.DefaultTransport = fake
 	client, warmup := pointEverythingAt(t, "https://api.example.test")
-	bodies := []string{`{"message":"x"}`, `{"Message":""}`, `{"detail":"x"}`, `{}`}
+	bodies := []string{`{"message":"x"}`, `{"Message":""}`, `{"detail":"x"}`, `{}`, `{ }`, "{\n}", "{\t}"}
 	checked := 0
 	for _, call := range publicRequestCalls(client, warmup) {
 		if messageOnlyExemptCall(call.name) {

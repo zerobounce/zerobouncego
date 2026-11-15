@@ -10,8 +10,10 @@ import (
 // so a JSON error that starts with one would otherwise be saved as a file.
 func withoutBOM(body string) string {
 	s := strings.TrimSpace(body)
-	s = strings.TrimPrefix(s, "\uFEFF")
-	return strings.TrimSpace(s)
+	for strings.HasPrefix(s, "\uFEFF") {
+		s = strings.TrimSpace(strings.TrimPrefix(s, "\uFEFF"))
+	}
+	return s
 }
 
 func GetFileJSONIndicatesError(body string) bool {
@@ -53,7 +55,7 @@ func GetFileJSONIndicatesError(body string) bool {
 
 // FormatGetFileErrorMessage returns a short message from a getfile JSON error body.
 func FormatGetFileErrorMessage(body string) string {
-	s := strings.TrimSpace(body)
+	s := withoutBOM(body)
 	var o map[string]interface{}
 	if err := json.Unmarshal([]byte(s), &o); err != nil {
 		if s == "" {
@@ -86,11 +88,10 @@ func shouldTreatGetFileBodyAsError(body, contentType string) bool {
 	if contentTypeIncludesApplicationJSON(contentType) {
 		return true
 	}
-	// Any JSON object or array is a JSON body, not a result file, including
-	// one that is not shaped like an error and one that follows a BOM.
+	// Any body that starts like JSON is not a result file, including one that
+	// is not shaped like an error, one that follows one or more BOMs, and one
+	// that is not valid JSON (`{"error":"x"} trailing`). A result file does
+	// not start with `{` or `[`.
 	s := withoutBOM(body)
-	if len(s) == 0 || (s[0] != '{' && s[0] != '[') {
-		return false
-	}
-	return json.Valid([]byte(s))
+	return len(s) > 0 && (s[0] == '{' || s[0] == '[')
 }

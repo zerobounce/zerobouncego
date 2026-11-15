@@ -24,11 +24,21 @@ func TestGetFileJSONIndicatesError(t *testing.T) {
 	if !shouldTreatGetFileBodyAsError("csv,body", "application/problem+json") {
 		t.Fatal("+json content type")
 	}
+	if !shouldTreatGetFileBodyAsError("\uFEFF\uFEFF{\"error\":\"x\"}", "text/csv") {
+		t.Fatal("two BOMs before a JSON object")
+	}
+	if !shouldTreatGetFileBodyAsError("{\"error\":\"x\"} trailing", "text/csv") {
+		t.Fatal("JSON with trailing bytes")
+	}
 }
 
 func TestFormatGetFileErrorMessage(t *testing.T) {
 	msg := FormatGetFileErrorMessage(`{"success":false,"message":"not ready"}`)
 	if msg != "not ready" {
 		t.Fatalf("got %q", msg)
+	}
+	msg = FormatGetFileErrorMessage("\uFEFF{\"success\":false,\"message\":\"File not found\"}")
+	if msg != "File not found" {
+		t.Fatalf("BOM message: %q", msg)
 	}
 }

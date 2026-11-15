@@ -807,7 +807,8 @@ All 26 methods:
 documented keys:
 
 - `EmailContent`: `company_name`, `company_website`, `company_description`,
-  `types_of_emails` (a `[]string` drawn from `WarmupEmailTypes`) and
+  `types_of_emails` (a `[]string`, or a `[]interface{}` of strings as JSON
+  decoding produces, drawn from `WarmupEmailTypes`) and
   `example_email`.
 - `ManagedSending`: `weekdays_only` (a `bool`), `timezone` (a `string`, e.g.
   `"Europe/Bucharest"`), `timezone_offset` (any Go number from -11 to 14,

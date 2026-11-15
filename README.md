@@ -6,7 +6,7 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 
 - Keep API keys on a trusted server. Do not embed them in mobile apps or browser JavaScript that untrusted users can inspect.
 - Every request must go to an `https://` URL, whichever way its base URL was set (`SetURI`, the `URI`, `BULK_URI`, `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI` variables, their `ZERO_BOUNCE_*_URI` environment variables, a `Client`'s `URI` and `BulkURI`, or the Warmup client's base URL). Any other URL is refused before the request is sent; plain `http://` is allowed only to `127.0.0.1`, `localhost` and `[::1]`, for local tests. Do not pass end-user-controlled hosts into those settings.
-- API keys with surrounding whitespace or control characters are rejected before a request is sent. `Client` and `WarmupClient` print their key as `***` with every `fmt` verb.
+- API keys with surrounding whitespace, control characters, format characters (such as U+200B), or other invisible characters are rejected before a request is sent. `Client` and `WarmupClient` print their key as `***` with every `fmt` verb, and `json.Marshal`, `xml.Marshal` and `gob` do the same.
 - Request URLs include `api_key` as a query parameter (ZeroBounce API contract). Do not log full request URLs or enable payload debug logging in production.
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)
@@ -873,7 +873,8 @@ All 26 methods:
 documented keys:
 
 - `EmailContent`: `company_name`, `company_website`, `company_description`,
-  `types_of_emails` (a `[]string` drawn from `WarmupEmailTypes`) and
+  `types_of_emails` (a `[]string`, or a `[]interface{}` of strings as JSON
+  decoding produces, drawn from `WarmupEmailTypes`) and
   `example_email`.
 - `ManagedSending`: `weekdays_only` (a `bool`), `timezone` (a `string`, e.g.
   `"Europe/Bucharest"`), `timezone_offset` (any Go number from -11 to 14,

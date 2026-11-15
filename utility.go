@@ -347,16 +347,34 @@ func (t httpsOnlyTransport) RoundTrip(request *http.Request) (*http.Response, er
 	return base.RoundTrip(request)
 }
 
+// http2DebugEnabledAtInit is GODEBUG as this process started. net/http reads
+// that once, so clearing GODEBUG later does not stop the frame log.
+var http2DebugEnabledAtInit = godebugEnablesHTTP2FrameLog(os.Getenv("GODEBUG"))
+
 // http2DebugLogsRequests reports whether GODEBUG turns on the net/http
 // HTTP/2 frame log. That log writes the :path, and the API key is in it.
 func http2DebugLogsRequests() bool {
-	for _, part := range strings.Split(os.Getenv("GODEBUG"), ",") {
+	return http2DebugEnabledAtInit || godebugEnablesHTTP2FrameLog(os.Getenv("GODEBUG"))
+}
+
+// godebugEnablesHTTP2FrameLog reports whether a GODEBUG value turns on
+// net/http's HTTP/2 frame log. net/http matches the substrings http2debug=1
+// and http2debug=2 anywhere in the value, so a later http2debug=2 still logs
+// when an earlier one is 0. Any other non-zero http2debug setting is refused
+// too.
+func godebugEnablesHTTP2FrameLog(value string) bool {
+	if strings.Contains(value, "http2debug=1") || strings.Contains(value, "http2debug=2") {
+		return true
+	}
+	for _, part := range strings.Split(value, ",") {
 		part = strings.TrimSpace(part)
 		if !strings.HasPrefix(part, "http2debug=") {
 			continue
 		}
-		value := strings.TrimPrefix(part, "http2debug=")
-		return value != "" && value != "0"
+		setting := strings.TrimPrefix(part, "http2debug=")
+		if setting != "" && setting != "0" {
+			return true
+		}
 	}
 	return false
 }

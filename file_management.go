@@ -159,6 +159,7 @@ type FileStatusResponse struct {
 	CompletePercentage string  `json:"complete_percentage"`
 	FilePhase2Status   *string `json:"file_phase_2_status,omitempty"`
 	ReturnUrl          string  `json:"return_url"`
+	ErrorReason        *string `json:"error_reason"`
 }
 
 // Percentage - provide the percentage, from a response payload, as a float

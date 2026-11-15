@@ -10,6 +10,7 @@ package zerobouncego
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -54,7 +55,7 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 	// A key with surrounding whitespace or control characters would be quoted,
 	// unredacted, in the HTTP library's own error.
 	if !validKeyText(apiKey) {
-		return nil, fmt.Errorf("invalid parameter: api_key has surrounding whitespace or control characters")
+		return nil, errors.New(invalidKeyTextMessage)
 	}
 	base := baseURL
 	if strings.TrimSpace(base) == "" {
@@ -188,10 +189,10 @@ func (c *WarmupClient) csv(path string, params url.Values) (string, error) {
 	contentType := strings.ToLower(header.Get("Content-Type"))
 	// Not a CSV: an empty body, JSON (by content type, including +json, or an
 	// object or list whatever the content type, BOM stripped) or an HTML page.
-	trimmed := bytes.TrimSpace(payload)
-	trimmed = bytes.TrimPrefix(trimmed, []byte("\uFEFF"))
-	trimmed = bytes.TrimSpace(trimmed)
-	jsonBody := len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') && json.Valid(trimmed)
+	trimmed := []byte(withoutBOM(string(payload)))
+	// A body that starts with `{` or `[` is JSON, valid or not. A result CSV
+	// does not. One BOM strip is not enough: a second BOM would hide the `{`.
+	jsonBody := len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
 	if len(trimmed) == 0 || contentTypeIncludesApplicationJSON(contentType) || jsonBody ||
 		contentTypeIsHTML(contentType) || bodyLooksLikeHTML(string(payload)) {
 		return "", &ZBApiError{
@@ -736,7 +737,7 @@ func (c *WarmupClient) TestSMTPConfiguration(fromAddress, username, password, se
 
 // warmupMessageFromBody turns a Warmup error body into a short message.
 func warmupMessageFromBody(body []byte, status int) string {
-	trimmed := strings.TrimSpace(string(body))
+	trimmed := withoutBOM(string(body))
 	if trimmed == "" {
 		return fmt.Sprintf("Empty response from ZeroBounce (HTTP %d)", status)
 	}

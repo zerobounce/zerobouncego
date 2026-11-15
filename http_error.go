@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/url"
 	"regexp"
@@ -163,7 +164,8 @@ const credentialOmittedMessage = "ZeroBounce's response was omitted from this er
 // percent escapes, another JSON escaper) is caught here by decoding what is
 // left. When any view of text, decoded up to maxSecretDecodeLayers layers
 // deep in any order (percent-decoding, percent-decoding with + as a space,
-// JSON-unescaping with \/ and \uXXXX), contains a secret, the whole text is
+// JSON-unescaping with \/ and \uXXXX, a backslash or \xHH escape, a doubled
+// quote, an HTML character reference), contains a secret, the whole text is
 // dropped for credentialOmittedMessage.
 func omitIfSecretSurvives(text string, secrets ...string) string {
 	var present []string
@@ -211,6 +213,43 @@ var secretDecoders = []func(string) string{
 	func(text string) string { return percentDecoded(text, false) },
 	func(text string) string { return percentDecoded(text, true) },
 	jsonUnescaped,
+	quoteDecoded,
+}
+
+// quoteDecoded undoes one layer of quote spellings JSON does not: a
+// backslash before a single quote, a \xHH byte, an HTML character reference
+// (&#39;, &quot;), and a quote doubled the way SQL writes it. A secret that
+// contains a quote comes back in these forms, and none of them is a spelling
+// maskSecrets generates.
+func quoteDecoded(text string) string {
+	text = strings.ReplaceAll(text, `\'`, "'")
+	text = hexByteEscapesDecoded(text)
+	text = html.UnescapeString(text)
+	text = strings.ReplaceAll(text, "''", "'")
+	text = strings.ReplaceAll(text, `""`, `"`)
+	return text
+}
+
+// hexByteEscapesDecoded turns \xHH and \XHH into that byte. A sequence that
+// is not two hex digits is left as it is.
+func hexByteEscapesDecoded(text string) string {
+	if !strings.Contains(text, `\x`) && !strings.Contains(text, `\X`) {
+		return text
+	}
+	var out strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\\' && i+3 < len(text) && (text[i+1] == 'x' || text[i+1] == 'X') {
+			high, okHigh := hexValue(text[i+2])
+			low, okLow := hexValue(text[i+3])
+			if okHigh && okLow {
+				out.WriteByte(high<<4 | low)
+				i += 3
+				continue
+			}
+		}
+		out.WriteByte(text[i])
+	}
+	return out.String()
 }
 
 func hexValue(c byte) (byte, bool) {
@@ -336,25 +375,46 @@ func (c RequestConfig) requireKey() error {
 		return errors.New("api_key is required: call Initialize or New with a non-empty api_key")
 	}
 	if !validKeyText(c.APIKey) {
-		return errors.New("invalid parameter: api_key has surrounding whitespace or control characters")
+		return errors.New(invalidKeyTextMessage)
 	}
 	rememberKey(c.APIKey)
 	return nil
 }
 
+// invalidKeyTextMessage is the error for a key validKeyText refuses.
+const invalidKeyTextMessage = "invalid parameter: api_key has surrounding whitespace or control characters, a format character, or an invisible character"
+
 // validKeyText reports whether a key has no surrounding whitespace and no
-// control characters. Such a key would be quoted, unredacted, in the HTTP
-// library's own error.
+// control, format or invisible characters. Such a key would be quoted,
+// unredacted, in the HTTP library's own error, or would be sent while looking
+// like a different key.
 func validKeyText(key string) bool {
 	if key != strings.TrimSpace(key) {
 		return false
 	}
-	// Format characters (U+200B, U+FEFF, U+180E and the rest of Cf) are not
-	// Unicode spaces, so TrimSpace keeps them, and a key padded with one
-	// would be sent and could be quoted back in a transport error.
-	return !strings.ContainsFunc(key, func(r rune) bool {
-		return r < 32 || r == 127 || unicode.Is(unicode.Cf, r)
-	})
+	return !strings.ContainsFunc(key, invalidKeyRune)
+}
+
+// invalidKeyRune reports a rune that must not appear in an API key.
+// Controls include the C1 range (U+0080–U+009F). Format characters (U+200B,
+// U+FEFF, U+180E and the rest of Cf) are not Unicode spaces, so TrimSpace
+// keeps them. The other runes are invisible but not in Cf: the default
+// ignorables, variation selectors, and the braille blank.
+func invalidKeyRune(r rune) bool {
+	if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		return true
+	}
+	switch r {
+	case 0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x2800, 0x3164, 0xFFA0:
+		return true
+	}
+	if r >= 0xFE00 && r <= 0xFE0F {
+		return true
+	}
+	if r >= 0xE0100 && r <= 0xE01EF {
+		return true
+	}
+	return false
 }
 
 // containsFold reports whether text holds secret in any case. Comparing the
@@ -615,7 +675,17 @@ func allowsMessageOnly(dest interface{}) bool {
 }
 
 func emptyJSONObject(body []byte) bool {
-	return string(bytes.Trim(body, " \t\r\n")) == "{}"
+	// Whitespace inside the braces is still an empty object: `{ }`, a
+	// newline, a tab. Comparing the trimmed text with "{}" misses those.
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return false
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(trimmed, &object) != nil || object == nil {
+		return false
+	}
+	return len(object) == 0
 }
 
 func decodeJSONBody(status int, contentType string, body []byte, dest interface{}) error {

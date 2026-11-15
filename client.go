@@ -2,6 +2,7 @@ package zerobouncego
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 )
@@ -110,6 +111,12 @@ func (c Client) MarshalJSON() ([]byte, error) {
 	return json.Marshal(redactedConfigOf(c.APIKey, c.URI, c.BulkURI))
 }
 
+// MarshalXML keeps the API key out of xml.Marshal, including when a Client
+// sits in a slice or another struct.
+func (c Client) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	return encoder.EncodeElement(redactedConfigOf(c.APIKey, c.URI, c.BulkURI), start)
+}
+
 // GobEncode keeps the API key out of gob. Encoding/gob calls it for this
 // value and for slices and maps of it.
 func (c Client) GobEncode() ([]byte, error) {
@@ -129,6 +136,11 @@ func (c *Client) GobDecode(data []byte) error {
 // MarshalJSON keeps the API key out of json.Marshal of a RequestConfig.
 func (c RequestConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(redactedConfigOf(c.APIKey, c.URI, c.BulkURI))
+}
+
+// MarshalXML keeps the API key out of xml.Marshal of a RequestConfig.
+func (c RequestConfig) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	return encoder.EncodeElement(redactedConfigOf(c.APIKey, c.URI, c.BulkURI), start)
 }
 
 // GobEncode keeps the API key out of gob of a RequestConfig.

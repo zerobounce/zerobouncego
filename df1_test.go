@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"encoding/xml"
 	"io"
 	"net/http"
 	"os"
@@ -36,7 +37,11 @@ func TestBaseURLWithUserinfoIsRefused(t *testing.T) {
 
 func TestFormatCharactersInAKeyAreRefused(t *testing.T) {
 	fake := useFake(t)
-	for _, key := range []string{"abc\u200b", "\uFEFFabc", "abc\u180E"} {
+	for _, key := range []string{
+		"abc\u200b", "\uFEFFabc", "abc\u180E",
+		"abc\u3164def", "abc\u2800", "abc\u034Fdef", "abc\u115F",
+		"abc\u0085", "abc\uFE00def",
+	} {
 		client := New(key)
 		if _, err := client.Validate("a@b.com", ""); err == nil || !strings.Contains(err.Error(), "whitespace or control") {
 			t.Fatalf("%q: %v", key, err)
@@ -81,6 +86,19 @@ func TestClientEncodingOmitsTheKey(t *testing.T) {
 	if bytes.Contains(buf.Bytes(), []byte(secret)) {
 		t.Fatal("gob holds the key")
 	}
+	type clientWithExtra struct {
+		Client
+		Extra string
+	}
+	for _, value := range []any{client, *client, client.config(), []Client{*client}, clientWithExtra{Client: *client, Extra: "x"}} {
+		xmlEncoded, err := xml.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(xmlEncoded, []byte(secret)) {
+			t.Fatalf("xml holds the key: %s", xmlEncoded)
+		}
+	}
 }
 
 func TestNegativeTimeoutIsRefused(t *testing.T) {
@@ -95,15 +113,33 @@ func TestNegativeTimeoutIsRefused(t *testing.T) {
 }
 
 func TestHTTP2DebugRefusesToSend(t *testing.T) {
-	fake := useFake(t)
-	t.Setenv("GODEBUG", "http2debug=2")
-	Initialize("debug-key")
-	if _, err := GetCredits(); err == nil || !strings.Contains(err.Error(), "http2debug") {
-		t.Fatalf("GetCredits: %v", err)
+	for _, value := range []string{"http2debug=2", "http2debug=0,http2debug=2", "http2debug=1"} {
+		t.Run(value, func(t *testing.T) {
+			fake := useFake(t)
+			t.Setenv("GODEBUG", value)
+			Initialize("debug-key")
+			if _, err := GetCredits(); err == nil || !strings.Contains(err.Error(), "http2debug") {
+				t.Fatalf("GetCredits: %v", err)
+			}
+			if len(fake.take()) != 0 {
+				t.Fatal("request was sent with http2debug on")
+			}
+		})
 	}
-	if len(fake.take()) != 0 {
-		t.Fatal("request was sent with http2debug on")
-	}
+	t.Run("enabled at startup", func(t *testing.T) {
+		fake := useFake(t)
+		previous := http2DebugEnabledAtInit
+		http2DebugEnabledAtInit = true
+		t.Cleanup(func() { http2DebugEnabledAtInit = previous })
+		t.Setenv("GODEBUG", "")
+		Initialize("debug-key")
+		if _, err := GetCredits(); err == nil || !strings.Contains(err.Error(), "http2debug") {
+			t.Fatalf("GetCredits: %v", err)
+		}
+		if len(fake.take()) != 0 {
+			t.Fatal("request was sent after http2debug was cleared")
+		}
+	})
 }
 
 func TestInitializeWithURIRejectsAnUnknownConstant(t *testing.T) {
@@ -180,5 +216,78 @@ func TestWarmupTypesOfEmailsAcceptsAJSONArray(t *testing.T) {
 	rule := 1
 	if _, err := warmup.AddSendingAccount("a@b.com", "zb_managed", &WarmupSendingAccountOptions{EngagementRuleID: &rule}); err == nil || !strings.Contains(err.Error(), "self_managed") {
 		t.Fatalf("engagement rule on zb_managed: %v", err)
+	}
+}
+
+func TestQuotedSecretEchoFromAResponseIsOmitted(t *testing.T) {
+	const secret = "zb-test-KEY-abc'DEF123456"
+	bodies := []string{
+		`bad key zb-test-KEY-abc\'DEF123456`,
+		"bad key 'zb-test-KEY-abc''DEF123456'",
+		`bad key zb-test-KEY-abc&#39;DEF123456`,
+		`bad key zb-test-KEY-abc\x27DEF123456`,
+	}
+	for _, body := range bodies {
+		t.Run(body, func(t *testing.T) {
+			_, warmup := useWarmupResponder(t, "warmup-key", func(req *http.Request, _ string) (*http.Response, error) {
+				return textResponse(req, 400, "text/plain", body), nil
+			})
+			_, err := warmup.TestSMTPConfiguration("a@example.com", "user", secret, "smtp.example.com", 587)
+			if err == nil || strings.Contains(err.Error(), "DEF123456") || !strings.Contains(err.Error(), "omitted") {
+				t.Fatalf("smtp: %v", err)
+			}
+			client := New(secret)
+			client.URI = "https://api.example.test/v2/"
+			_, err = client.Validate("a@example.com", "")
+			if err == nil || strings.Contains(err.Error(), "DEF123456") || !strings.Contains(err.Error(), "omitted") {
+				t.Fatalf("validate: %v", err)
+			}
+		})
+	}
+}
+
+func TestWarmupDownloadRejectsJSONBodies(t *testing.T) {
+	cases := []struct {
+		name, contentType, body, message string
+	}{
+		{"bom object", "text/csv", "\uFEFF{\"error\":\"x\"}", ""},
+		{"two boms", "text/csv", "\uFEFF\uFEFF{\"message\":\"File not found\"}", "File not found"},
+		{"plus json", "application/problem+json", "seed,provider\na,b\n", ""},
+		{"trailing", "text/csv", "{\"error\":\"x\"} trailing", ""},
+	}
+	for _, cs := range cases {
+		t.Run(cs.name, func(t *testing.T) {
+			_, warmup := useWarmupResponder(t, "warmup-key", func(req *http.Request, _ string) (*http.Response, error) {
+				return textResponse(req, 200, cs.contentType, cs.body), nil
+			})
+			got, err := warmup.DownloadSeeds()
+			if err == nil || got != "" {
+				t.Fatalf("got %q err %v", got, err)
+			}
+			if strings.Contains(err.Error(), "\uFEFF") {
+				t.Fatalf("BOM in the message: %v", err)
+			}
+			if cs.message != "" && !strings.Contains(err.Error(), cs.message) {
+				t.Fatalf("message %v", err)
+			}
+		})
+	}
+	_, warmup := useWarmupResponder(t, "warmup-key", func(req *http.Request, _ string) (*http.Response, error) {
+		return textResponse(req, 200, "text/csv", "seed,provider\na@b.c,gmail\n"), nil
+	})
+	got, err := warmup.DownloadSeeds()
+	if err != nil || !strings.Contains(got, "seed,provider") {
+		t.Fatalf("csv %q err %v", got, err)
+	}
+}
+
+func TestFileStatusKeepsErrorReason(t *testing.T) {
+	var status FileStatusResponse
+	body := []byte(`{"success":true,"file_id":"1","file_name":"f.csv","file_status":"Complete","complete_percentage":"0%","error_reason":"bad file"}`)
+	if err := json.Unmarshal(body, &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.ErrorReason == nil || *status.ErrorReason != "bad file" {
+		t.Fatalf("%v", status.ErrorReason)
 	}
 }
