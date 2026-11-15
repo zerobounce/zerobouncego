@@ -60,8 +60,12 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 	if strings.TrimSpace(base) == "" {
 		base = WarmupDefaultBaseURL
 	}
-	if !strings.HasPrefix(strings.ToLower(base), "https://") {
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Host == "" {
 		return nil, fmt.Errorf("invalid parameter: base_url must be an https:// URL")
+	}
+	if err := checkRequestURL(parsed); err != nil {
+		return nil, fmt.Errorf("invalid parameter: base_url: %w", err)
 	}
 	return &WarmupClient{
 		apiKey: apiKey,
@@ -182,11 +186,13 @@ func (c *WarmupClient) csv(path string, params url.Values) (string, error) {
 		return "", err
 	}
 	contentType := strings.ToLower(header.Get("Content-Type"))
-	// Not a CSV: an empty body, JSON (by content type, or an object or list
-	// whatever the content type) or an HTML page (by content type or body).
+	// Not a CSV: an empty body, JSON (by content type, including +json, or an
+	// object or list whatever the content type, BOM stripped) or an HTML page.
 	trimmed := bytes.TrimSpace(payload)
+	trimmed = bytes.TrimPrefix(trimmed, []byte("\uFEFF"))
+	trimmed = bytes.TrimSpace(trimmed)
 	jsonBody := len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') && json.Valid(trimmed)
-	if len(trimmed) == 0 || strings.Contains(contentType, CONTENT_TYPE_JSON) || jsonBody ||
+	if len(trimmed) == 0 || contentTypeIncludesApplicationJSON(contentType) || jsonBody ||
 		contentTypeIsHTML(contentType) || bodyLooksLikeHTML(string(payload)) {
 		return "", &ZBApiError{
 			StatusCode: status,
@@ -197,6 +203,27 @@ func (c *WarmupClient) csv(path string, params url.Values) (string, error) {
 }
 
 // -- argument checks ---------------------------------------------------------
+
+// warmupStringList accepts the []string callers build and the []interface{}
+// a JSON config decodes into.
+func warmupStringList(value interface{}) ([]string, bool) {
+	switch typed := value.(type) {
+	case []string:
+		return typed, true
+	case []interface{}:
+		list := make([]string, len(typed))
+		for i, item := range typed {
+			text, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			list[i] = text
+		}
+		return list, true
+	default:
+		return nil, false
+	}
+}
 
 func warmupRequired(value, name string) error {
 	if strings.TrimSpace(value) == "" {
@@ -303,12 +330,14 @@ func (c *WarmupClient) GetSendingAccount(fromAddress string) (map[string]interfa
 type WarmupSendingAccountOptions struct {
 	// EngagementRuleID is 0 to 4 and required for self_managed.
 	EngagementRuleID *int
-	// IgnoreConflict is self-managed only: do not fail when already registered.
+	// IgnoreConflict is sent for either onboarding model: do not fail when
+	// the address is already registered.
 	IgnoreConflict *bool
 	// EmailContent and ManagedSending are zb_managed only, and are sent as
 	// given. The documented EmailContent keys are company_name,
-	// company_website, company_description, types_of_emails ([]string of
-	// transactional, newsletter, marketing) and example_email.
+	// company_website, company_description, types_of_emails ([]string, or a
+	// []interface{} of strings as JSON decoding produces, of transactional,
+	// newsletter and marketing) and example_email.
 	EmailContent map[string]interface{}
 	// The documented ManagedSending keys are weekdays_only (bool), timezone
 	// (string, e.g. "Europe/Bucharest"), timezone_offset (any Go number, -11
@@ -351,6 +380,8 @@ func (c *WarmupClient) AddSendingAccount(fromAddress, onboardingModel string, op
 		if opts.EmailContent != nil || opts.ManagedSending != nil {
 			return nil, fmt.Errorf("invalid parameter: email_content and managed_sending are for zb_managed")
 		}
+	} else if opts.EngagementRuleID != nil {
+		return nil, fmt.Errorf("invalid parameter: engagement_rule_id is for self_managed")
 	}
 	if opts.IgnoreConflict != nil {
 		body["ignore_conflict"] = *opts.IgnoreConflict
@@ -361,10 +392,11 @@ func (c *WarmupClient) AddSendingAccount(fromAddress, onboardingModel string, op
 			content[key] = value
 		}
 		if types, found := content["types_of_emails"]; found {
-			list, ok := types.([]string)
+			list, ok := warmupStringList(types)
 			if !ok {
 				return nil, fmt.Errorf("invalid parameter: types_of_emails (transactional, newsletter and/or marketing)")
 			}
+			content["types_of_emails"] = list
 			for _, item := range list {
 				valid := false
 				for _, allowed := range WarmupEmailTypes {

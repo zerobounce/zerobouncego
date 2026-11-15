@@ -14,6 +14,7 @@ Guidance for AI coding agents working in this repository.
 - `file_validation.go`, `file_management.go`, `ai_scoring.go`: bulk validation and AI scoring files.
 - `score_email.go`: real-time scoring.
 - `email_finder.go`, `domain_search.go`, `activity_data.go`.
+- `warmup.go`: the Warmup client. `inbox_placement.go`: Inbox Placement.
 - `priority3_bulk.go`, `bulk_root_helpers.go`, `filters.go`: bulk finder, domain search, list evaluator, filters, and S3.
 - `http_error.go`: turns HTTP failures, HTML pages, and empty or non-JSON bodies into a short `error`.
 - `client.go`: `Client` / `New`.
@@ -27,7 +28,7 @@ go test -short -count=1 .
 go test -short -race .
 ```
 
-CI (`.github/workflows/sdk_ci.yml`) runs `go test ./... -cover -short -v` on Go 1.27. `-short` skips tests that call the live API; a plain `go test ./...` skips them too unless `ZEROBOUNCE_INTEGRATION=1` is set. That test run is the typecheck; there is no separate lint step.
+CI (`.github/workflows/sdk_ci.yml`) runs `go test ./... -cover -short -v` on the `go.mod` floor and on Go 1.27. `-short` skips tests that call the live API; a plain `go test ./...` skips them too unless `ZEROBOUNCE_INTEGRATION=1` is set. That test run is the typecheck; there is no separate lint step.
 
 ## Conventions
 
@@ -40,7 +41,7 @@ CI (`.github/workflows/sdk_ci.yml`) runs `go test ./... -cover -short -v` on Go 
 - **Timeouts are checked before the request.** Single validate accepts 3–60 seconds. Batch validate accepts 10–120 seconds. `0` is a real value and is rejected. An empty string or a nil pointer is omitted.
 - **An empty API key or a nil upload is rejected before any request.**
 - **Failures are `error` values.** The message must be short: no raw HTML, no megabyte body, and no `Error: Error:` prefix. An account-level `ValidateBatch` error (`email_address` `all`) is a returned error. A per-address error stays on `ValidateBatchResponse.Errors` with a nil error.
-- **Tests replace `http.DefaultTransport`.** The SDK client leaves `Transport` nil, so it uses that default, and it does not follow redirects. Do not call the live API from `go test -short`.
+- **Tests replace `http.DefaultTransport`.** The SDK client wraps that transport in `httpsOnlyTransport` (it is not left nil) and does not follow redirects. Do not call the live API from `go test -short`.
 - Match the surrounding style. Do not reformat unrelated code.
 
 ## Changelog
@@ -50,7 +51,7 @@ CI (`.github/workflows/sdk_ci.yml`) runs `go test ./... -cover -short -v` on Go 
 - Add every user-visible change to `## [Unreleased]` in the same commit as the change.
 - Group entries under these headings, in this order, omitting empty ones: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 - Write for SDK users: name the function, option, or behaviour, and say what changed. Leave out CI-only changes, internal refactors, and fixes to code that was never released.
-- At 2.y.z, a breaking change bumps the major version, a new function or option bumps the minor version, and fixes alone bump the patch version.
+- At 3.y.z, a breaking change bumps the major version, a new function or option bumps the minor version, and fixes alone bump the patch version.
 
 ## Releasing
 

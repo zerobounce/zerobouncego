@@ -1,6 +1,7 @@
 package zerobouncego
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 )
@@ -89,4 +90,58 @@ func (c RequestConfig) GoString() string { return "zerobouncego." + c.String() }
 // Format keeps the API key out of every fmt verb.
 func (c RequestConfig) Format(state fmt.State, verb rune) {
 	formatRedacted(state, verb, c.String(), c.GoString())
+}
+
+// redactedConfig is the JSON and gob shape of a client. The key is masked
+// because encoding/json and encoding/gob otherwise write the exported field.
+type redactedConfig struct {
+	APIKey  string
+	URI     string
+	BulkURI string
+}
+
+func redactedConfigOf(key, uri, bulk string) redactedConfig {
+	return redactedConfig{APIKey: redactedKey(key), URI: uri, BulkURI: bulk}
+}
+
+// MarshalJSON keeps the API key out of json.Marshal, including when a Client
+// sits in a slice or a map.
+func (c Client) MarshalJSON() ([]byte, error) {
+	return json.Marshal(redactedConfigOf(c.APIKey, c.URI, c.BulkURI))
+}
+
+// GobEncode keeps the API key out of gob. Encoding/gob calls it for this
+// value and for slices and maps of it.
+func (c Client) GobEncode() ([]byte, error) {
+	return json.Marshal(redactedConfigOf(c.APIKey, c.URI, c.BulkURI))
+}
+
+// GobDecode restores a client from GobEncode. The key is the masked value.
+func (c *Client) GobDecode(data []byte) error {
+	var decoded redactedConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = Client{APIKey: decoded.APIKey, URI: decoded.URI, BulkURI: decoded.BulkURI}
+	return nil
+}
+
+// MarshalJSON keeps the API key out of json.Marshal of a RequestConfig.
+func (c RequestConfig) MarshalJSON() ([]byte, error) {
+	return json.Marshal(redactedConfigOf(c.APIKey, c.URI, c.BulkURI))
+}
+
+// GobEncode keeps the API key out of gob of a RequestConfig.
+func (c RequestConfig) GobEncode() ([]byte, error) {
+	return json.Marshal(redactedConfigOf(c.APIKey, c.URI, c.BulkURI))
+}
+
+// GobDecode restores a RequestConfig from GobEncode.
+func (c *RequestConfig) GobDecode(data []byte) error {
+	var decoded redactedConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = RequestConfig{APIKey: decoded.APIKey, URI: decoded.URI, BulkURI: decoded.BulkURI}
+	return nil
 }

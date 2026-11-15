@@ -36,8 +36,9 @@ jobs:
 
           persist-credentials: false
       - name: Verify tag, version.go, and go.mod module path
+        env:
+          TAG: ${{ github.event.inputs.tag }}
         run: |
-          TAG="${{ github.event.inputs.tag }}"
           if [ -z "$TAG" ]; then
             echo "Error: Tag is required."
             exit 1
@@ -82,15 +83,22 @@ jobs:
     needs: [validate-tag]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - name: Checkout tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/tags/${{ github.event.inputs.tag }}
           persist-credentials: false
+      - name: Pin checkout to the validated commit
+        env:
+          TAG_SHA: ${{ needs.validate-tag.outputs.tag_sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$TAG_SHA" ]; then
+            echo "Error: checked out $(git rev-parse HEAD), validate job recorded $TAG_SHA."
+            exit 1
+          fi
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27"
           # No module/build cache in the release job: a cache restored here could have been
@@ -119,8 +127,8 @@ jobs:
       - name: Create release if missing
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag }}
         run: |
-          TAG="${{ github.event.inputs.tag }}"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists, skipping."
           else

@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A 200 whose body is only a message (`message`, `Message`, `detail`, a blank or null message) or `{}` was a zero-value result from the typed calls other than email finder and domain search: file submit, status and delete, the S3 and SFTP jobs, list-evaluator submit, batch, activity, score and usage. It is now a `*ZBApiError` with status 200. Validate's greylist answer, the filter calls, the Inbox Placement calls, the list-evaluator result and Warmup are unchanged. `{}` is an error on email finder and domain search too.
+- A bulk download saved a JSON body as the result file when it started with a UTF-8 BOM, started with `[`, or was an object with no error key, and it treated `application/problem+json` as a file. Any JSON object or array is now an error, including after a BOM, and so is a `+json` content type. Warmup `DownloadSeeds` and `DownloadStatistics` do the same.
+- `NewWarmupClient` accepts `http://` to `127.0.0.1`, `localhost` and `[::1]`, as the other base URLs already did, and refuses a URL with userinfo.
+- `types_of_emails` in `EmailContent` accepts a `[]interface{}` of strings, which is what a JSON config decodes to, as well as a `[]string`.
+- Setting `EngagementRuleID` on a `zb_managed` account is an error. It used to be ignored. `IgnoreConflict` is still sent for either onboarding model.
+- A negative `http.DefaultClient.Timeout` is rejected before the request. Go would otherwise treat it as no timeout.
+- `InitializeWithURI` with a value that is not one of the `ZB_API_URL_*` constants returns an error and leaves the key and URI unchanged.
 - The bulk downloads (`BulkValidationResult[WithOptions]`, `AiScoringResult[WithOptions]`, `GenericResultFetch[WithOptions]`, `BulkEmailFinderResult`, `BulkDomainSearchResult`) returned a nil error for an empty HTTP 200 body (or one of only whitespace), whatever its content type, and wrote nothing, so the caller was told an empty result file had been saved. It is now a `*ZBApiError` with `StatusCode` 200 and the message `Empty response from ZeroBounce (HTTP 200)`, and nothing is written. Affects 2.2.0 to 3.0.1.
 - A 2xx that is not an API response (a `text/html` page, an HTML body under any content type, text that is not JSON, JSON that does not parse, or a download sent with a JSON content type) was a plain `error` with no status on every call except the Warmup ones. It is now a `*ZBApiError` with `StatusCode` set to that 2xx status, with the same message as before; `ErrorFromResponse` does the same. A body that cannot be read on a 2xx is still a plain error. Code that treated "not a `*ZBApiError`" as "the API never answered" now sees these as API errors. `ListFilters` (2.2.0 to 3.0.1) and `DeleteInboxPlacementTest` (3.0.1) returned malformed JSON that starts with `{` or `[` (`{"success": tru`) as a success; it is now that error too, and on the other calls it carries the status instead of being a plain error. Affects 2.2.0 to 3.0.1.
 - A bulk base URL with more than one trailing slash (`SetURI("", "https://host/v2//")`, or `BULK_URI` set that way) sent the bulk email finder and domain search calls, the S3 and SFTP/FTP file jobs and, after `SetURI`, the Inbox Placement calls to `/v2/<path>` and the list evaluator to `/v2/v2/listevaluator`. Every trailing slash is now stripped before `/v2`. Affects 2.2.0 to 3.0.1.
@@ -35,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- A base URL with userinfo (`https://api.zerobounce.net@evil.example/v2`) was accepted by `SetURI`, a `Client`'s `URI` and `NewWarmupClient`, and the API key was sent to the host after the `@`. It is now refused before the request.
+- An error built from a response body now also masks a secret when the server echoes it in a different case, including a percent-encoded copy of that case. This covers the API key, the Warmup key and the SMTP password.
+- An API key padded with a format character (U+200B, U+FEFF, U+180E, or any other Unicode format character) is rejected before a request, on the main client and on Warmup.
+- `json.Marshal` and `gob` of a `Client` or a `RequestConfig` no longer include the API key. `fmt` already printed it as `***`.
+- `LoadEnvFromFile` no longer prints a malformed `.env` line. That line can contain the API key; the message is now fixed.
+- The client refuses to send while `GODEBUG=http2debug` is set to anything other than `0`, because that log writes the request path and the API key is in it.
 - An error built from a response body no longer carries the API key. A body that echoed the key (`{"error": "Invalid API key <key>"}` or `{"success": false, "message": "... <key>"}` on an HTTP 200, a 400 quoting the request URL with `?api_key=<key>`, a JSON error on a 4xx/5xx, a getfile JSON error, `ValidateBatch`'s error for address `all`) was passed on as the error text or `ZBApiError.Message` by every call except the Warmup ones, and by `ErrorFromResponse`. Every key a request has been sent with is now masked as `***` in such a message, as sent, URL-encoded and JSON-escaped, and so is any `api_key=` value. The Warmup client already masked its key and shares the same masking now.
 - Redaction is now closed under encoding. After the known spellings of a secret are masked, the rest of an error message built from a response body is decoded up to four layers deep (the SDK's own request encoding plus three layers a server may echo it in) in every order (percent-decoding, percent-decoding with `+` as a space, JSON-unescaping including `\/` and `\uXXXX`); if any decoded view still holds an API key, the Warmup key or the SMTP username or password, the whole message is replaced with `ZeroBounce's response was omitted from this error because it contained a credential.` A body that echoed a secret in a spelling the masking did not generate (lowercase percent escapes, a URL encoding of a URL encoding, a third layer) used to hand it to the caller, on every call. Applies to `ZBApiError.Message`, the Warmup client's errors and `ErrorFromResponse`.
 - Secrets (API keys, and the Warmup SMTP/IMAP credentials) are now also masked in URL encoding with spaces as `%20` as well as `+`, in the HTML-safe JSON escaping `encoding/json` writes (`\u003c`, `\u003e`, `\u0026`), as the URL encoding of each JSON-escaped form, which is how a server echoes a URL-encoded JSON request body, and JSON-escaped twice (a JSON error body quoting the JSON request body). Longer forms are masked first, so no fragment of a secret is left behind.
@@ -45,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Inbox Placement Tester calls (`GetInboxPlacementProviders`, `GetInboxPlacementTestTypes`, `CreateInboxPlacementTest`, `GetInboxPlacementTest`, `ListInboxPlacementTests`, `DeleteInboxPlacementTest`, `GetInboxPlacementWebhook`, `SetInboxPlacementWebhook`) now check an HTTP 2xx body like every other call. In 2.2.0 and 3.0.0 an error-only body (`{"error": "Invalid API key"}`) or `{"success": false, ...}` came back as the result with a nil error; it is now a `*ZBApiError` with `StatusCode` 200 and the API's message. An HTML page or other non-JSON text on a 2xx was returned as the raw `encoding/json` error (`invalid character '<' looking for beginning of value`); it is now a plain error with the same short message as the other calls (`ZeroBounce returned an HTML error page ("<title>") instead of an API response.`). `DeleteInboxPlacementTest` now reads its response body too; an empty 2xx is still a success.
 
-## [3.0.0] - 2026-11-12
+## [3.0.0] - 2026-11-11
 
 ### Upgrading from 2.x
 
@@ -139,6 +152,10 @@ Details for each are under Added, Changed and Fixed below.
 - Redirects are disabled, so a 3xx response cannot send the API key to another host.
 - Error values no longer include the raw HTML access-denied page.
 
+## [2.1.4] - 2026-08-14
+
+Published to the module proxy. The changes in this tag were not written up in this file; 2.2.0 is the next section that records behaviour.
+
 ## [2.1.3] - 2026-06-10
 
 ### Added
@@ -168,6 +185,10 @@ Details for each are under Added, Changed and Fixed below.
 ### Changed
 
 - License the project under MIT.
+
+## [2.0.1] - 2026-03-03
+
+Tagged, never published. The module path had no `/v2` suffix, so proxy.golang.org does not serve this tag.
 
 ## [2.0.0] - 2026-03-03
 
@@ -221,10 +242,12 @@ Details for each are under Added, Changed and Fixed below.
 [3.0.1]: https://github.com/zerobounce/zerobouncego/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/zerobounce/zerobouncego/compare/v2.2.0...v3.0.0
 [2.2.0]: https://github.com/zerobounce/zerobouncego/compare/v2.1.4...v2.2.0
+[2.1.4]: https://github.com/zerobounce/zerobouncego/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/zerobounce/zerobouncego/compare/v2.1.1...v2.1.3
 [2.1.1]: https://github.com/zerobounce/zerobouncego/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/zerobounce/zerobouncego/compare/v2.0.2...v2.1.0
-[2.0.2]: https://github.com/zerobounce/zerobouncego/compare/v2.0.0...v2.0.2
+[2.0.2]: https://github.com/zerobounce/zerobouncego/compare/v2.0.1...v2.0.2
+[2.0.1]: https://github.com/zerobounce/zerobouncego/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/zerobounce/zerobouncego/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/zerobounce/zerobouncego/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/zerobounce/zerobouncego/compare/v1.2.0...v1.2.1

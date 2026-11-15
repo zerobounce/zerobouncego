@@ -288,7 +288,7 @@ not follow.`
 
 Bulk validation and scoring target the v2 bulk API. Docs: [v2 send file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-send-file), [v2 file status](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-file-status), [v2 get file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file).
 
-Optional `CsvFile` fields for **validation** send only: `ReturnURL`, `AllowPhase2` (`*bool`; nil omits `allow_phase_2`). Status responses include `FilePhase2Status` when present.
+`CsvFile.ReturnURL` is sent for validation and scoring. `AllowPhase2` (`*bool`; nil omits `allow_phase_2`) is validation send only. Status responses include `FilePhase2Status` when present.
 
 Optional getfile query parameters: `GetFileOptions` with `DownloadType` (`DownloadTypePhase1`, `DownloadTypePhase2`, `DownloadTypeCombined`) and `ActivityData` for **validation** getfile only. Use `BulkValidationResultWithOptions`, `AiScoringResultWithOptions`, or `GenericResultFetchWithOptions`.
 

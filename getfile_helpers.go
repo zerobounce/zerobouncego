@@ -6,8 +6,16 @@ import (
 )
 
 // GetFileJSONIndicatesError reports whether a getfile response body looks like a JSON error payload (including HTTP 200).
-func GetFileJSONIndicatesError(body string) bool {
+// withoutBOM drops a leading UTF-8 BOM. TrimSpace leaves U+FEFF in place,
+// so a JSON error that starts with one would otherwise be saved as a file.
+func withoutBOM(body string) string {
 	s := strings.TrimSpace(body)
+	s = strings.TrimPrefix(s, "\uFEFF")
+	return strings.TrimSpace(s)
+}
+
+func GetFileJSONIndicatesError(body string) bool {
+	s := withoutBOM(body)
 	if len(s) == 0 || s[0] != '{' {
 		return false
 	}
@@ -69,12 +77,20 @@ func FormatGetFileErrorMessage(body string) string {
 }
 
 func contentTypeIncludesApplicationJSON(ct string) bool {
-	return strings.Contains(strings.ToLower(ct), "application/json")
+	ct = strings.ToLower(ct)
+	// +json covers application/problem+json and application/vnd.api+json.
+	return strings.Contains(ct, "application/json") || strings.Contains(ct, "+json")
 }
 
 func shouldTreatGetFileBodyAsError(body, contentType string) bool {
 	if contentTypeIncludesApplicationJSON(contentType) {
 		return true
 	}
-	return GetFileJSONIndicatesError(body)
+	// Any JSON object or array is a JSON body, not a result file, including
+	// one that is not shaped like an error and one that follows a BOM.
+	s := withoutBOM(body)
+	if len(s) == 0 || (s[0] != '{' && s[0] != '[') {
+		return false
+	}
+	return json.Valid([]byte(s))
 }

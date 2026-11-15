@@ -1,6 +1,7 @@
 package zerobouncego
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -39,6 +40,7 @@ func TestMessageOnlyFinderAndDomainSearchAnswersAreErrorsWhateverTheMessage(t *t
 		for _, body := range bodies {
 			expectStatus200Error(t, call, fake, body)
 		}
+		expectStatus200Error(t, call, fake, `{}`)
 	}
 }
 
@@ -65,4 +67,44 @@ func TestAFileJobListMessageIsAcceptedOnDeleteAndFileStatus(t *testing.T) {
 	if checked < 4 {
 		t.Fatalf("sweep found %d delete and file-status calls, want at least 4", checked)
 	}
+}
+
+// Message-only answers, and an empty object, are errors on every typed call
+// except validate's greylist, the filter calls, Inbox Placement, the
+// list-evaluator result and Warmup.
+func TestMessageOnlyBodiesAreErrorsOnEveryTypedCall(t *testing.T) {
+	useFake(t)
+	fake := &fixedBodyTransport{}
+	http.DefaultTransport = fake
+	client, warmup := pointEverythingAt(t, "https://api.example.test")
+	bodies := []string{`{"message":"x"}`, `{"Message":""}`, `{"detail":"x"}`, `{}`}
+	checked := 0
+	for _, call := range publicRequestCalls(client, warmup) {
+		if messageOnlyExemptCall(call.name) {
+			continue
+		}
+		checked++
+		for _, body := range bodies {
+			fake.body = body
+			err := call.call()
+			var apiErr *ZBApiError
+			// File submits answer 201. The error carries that status.
+			if !errors.As(err, &apiErr) || apiErr.StatusCode != fake.status {
+				t.Errorf("%s %s: err = %#v, want a *ZBApiError with status %d", call.name, body, err, fake.status)
+			}
+		}
+	}
+	if checked < 30 {
+		t.Fatalf("message-only sweep checked %d calls, want at least 30", checked)
+	}
+}
+
+func messageOnlyExemptCall(name string) bool {
+	switch name {
+	case "Validate", "ValidateWithTimeout", "ValidateWithOptions", "Client.Validate",
+		"AddFilter", "ListFilters", "ListFilters(post)", "DeleteFilter",
+		"GetListEvaluatorResult", "DoPostFormRequest":
+		return true
+	}
+	return strings.HasPrefix(name, "WarmupClient.") || strings.Contains(name, "InboxPlacement")
 }

@@ -148,9 +148,14 @@ func Initialize(new_api_key_value string) {
 }
 
 // Initialize the API key and the URI explicitly
-func InitializeWithURI(new_api_key_value string, zbApiURL ZbApiURL) {
+func InitializeWithURI(new_api_key_value string, zbApiURL ZbApiURL) error {
+	uri, ok := zbApiURLValue[zbApiURL]
+	if !ok || uri == "" {
+		return fmt.Errorf("invalid parameter: api url")
+	}
 	API_KEY = new_api_key_value
-	URI = zbApiURLValue[zbApiURL]
+	URI = uri
+	return nil
 }
 
 // SetApiKey set the API key explicitly
@@ -169,6 +174,12 @@ var errPlainHTTP = errors.New("refusing to send the API key to a URL that is not
 func checkRequestURL(parsed *url.URL) error {
 	if parsed == nil {
 		return errPlainHTTP
+	}
+	// https://api.zerobounce.net@evil.example/v2 parses as https to
+	// evil.example with userinfo api.zerobounce.net. A prefix check accepts
+	// it and the key is sent to the host after the @.
+	if parsed.User != nil {
+		return errors.New("refusing to send the API key to a URL with userinfo")
 	}
 	if strings.EqualFold(parsed.Scheme, "https") {
 		return nil
@@ -190,8 +201,8 @@ func requireHTTPS(raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if checkRequestURL(parsed) != nil {
-		return "", fmt.Errorf("URI must be an https:// URL")
+	if err := checkRequestURL(parsed); err != nil {
+		return "", err
 	}
 	return raw, nil
 }
@@ -242,7 +253,13 @@ func SetURI(new_uri string, new_bulk_uri string) error {
 func LoadEnvFromFile() bool {
 	error_ := godotenv.Load(".env")
 	if error_ != nil {
-		fmt.Printf("The '.env' file was not found (%s). Continuing without it\n", error_.Error())
+		// godotenv quotes the offending line, API key included. The message
+		// stays fixed, and a missing file is not the same as a bad line.
+		if os.IsNotExist(error_) {
+			fmt.Printf("The '.env' file was not found. Continuing without it\n")
+		} else {
+			fmt.Printf("The '.env' file could not be read. Continuing without it\n")
+		}
 		return false
 	}
 	Initialize(getAPIKeyFromEnv())
@@ -309,6 +326,12 @@ type httpsOnlyTransport struct {
 }
 
 func (t httpsOnlyTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if http2DebugLogsRequests() {
+		if request.Body != nil {
+			request.Body.Close()
+		}
+		return nil, errors.New("refusing to send while GODEBUG=http2debug is enabled, because it logs the request URL")
+	}
 	if err := checkRequestURL(request.URL); err != nil {
 		if request.Body != nil {
 			request.Body.Close()
@@ -324,8 +347,40 @@ func (t httpsOnlyTransport) RoundTrip(request *http.Request) (*http.Response, er
 	return base.RoundTrip(request)
 }
 
+// http2DebugLogsRequests reports whether GODEBUG turns on the net/http
+// HTTP/2 frame log. That log writes the :path, and the API key is in it.
+func http2DebugLogsRequests() bool {
+	for _, part := range strings.Split(os.Getenv("GODEBUG"), ",") {
+		part = strings.TrimSpace(part)
+		if !strings.HasPrefix(part, "http2debug=") {
+			continue
+		}
+		value := strings.TrimPrefix(part, "http2debug=")
+		return value != "" && value != "0"
+	}
+	return false
+}
+
+type errorTransport struct{ err error }
+
+func (t errorTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.Body != nil {
+		request.Body.Close()
+	}
+	return nil, t.err
+}
+
 func timedHTTPClient() *http.Client {
 	c := *http.DefaultClient
+	if c.Timeout < 0 {
+		// net/http treats a negative Timeout as no deadline at all.
+		c.Timeout = 0
+		c.Transport = errorTransport{err: errors.New("invalid parameter: timeout must not be negative")}
+		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+		return &c
+	}
 	if c.Timeout == 0 {
 		c.Timeout = httpTimeout
 	}

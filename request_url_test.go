@@ -301,6 +301,8 @@ var offlineExports = map[string]bool{
 	"Client.String": true, "Client.GoString": true, "Client.Format": true,
 	"WarmupClient.String": true, "WarmupClient.GoString": true, "WarmupClient.Format": true,
 	"RequestConfig.String": true, "RequestConfig.GoString": true, "RequestConfig.Format": true,
+	"Client.MarshalJSON": true, "Client.GobEncode": true, "Client.GobDecode": true,
+	"RequestConfig.MarshalJSON": true, "RequestConfig.GobEncode": true, "RequestConfig.GobDecode": true,
 }
 
 // A new public request function has to join the sweep above.

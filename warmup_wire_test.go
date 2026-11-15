@@ -200,7 +200,7 @@ func TestAddSendingAccountRefusesBadOptionsBeforeSending(t *testing.T) {
 	for name, types := range map[string]interface{}{
 		"unknown value":     []string{"newsletter", "spam"},
 		"wrong case":        []string{"Newsletter"},
-		"not a string list": []interface{}{"newsletter"},
+		"not a string list": []interface{}{1},
 		"a string":          "newsletter",
 	} {
 		t.Run("types_of_emails "+name, func(t *testing.T) {

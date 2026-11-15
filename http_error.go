@@ -97,14 +97,26 @@ func secretForms(secret string) []string {
 		escaped := url.QueryEscape(value)
 		return []string{escaped, strings.ReplaceAll(escaped, "+", "%20")}
 	}
-	forms := []string{secret, url.PathEscape(secret)}
-	forms = append(forms, queryForms(secret)...)
-	for _, escape := range jsonEscapers {
-		escaped := escape(secret)
-		forms = append(forms, escaped)
-		forms = append(forms, queryForms(escaped)...)
-		// A JSON error body quoting the JSON request body.
-		forms = append(forms, escape(escaped))
+	// Upper and lower copies too: a proxy that echoes the key in another
+	// case must not put it back in the error (lessons 11 and 31).
+	seeds := []string{secret}
+	if folded := strings.ToUpper(secret); folded != secret {
+		seeds = append(seeds, folded)
+	}
+	if folded := strings.ToLower(secret); folded != secret {
+		seeds = append(seeds, folded)
+	}
+	var forms []string
+	for _, seed := range seeds {
+		forms = append(forms, seed, url.PathEscape(seed))
+		forms = append(forms, queryForms(seed)...)
+		for _, escape := range jsonEscapers {
+			escaped := escape(seed)
+			forms = append(forms, escaped)
+			forms = append(forms, queryForms(escaped)...)
+			// A JSON error body quoting the JSON request body.
+			forms = append(forms, escape(escaped))
+		}
 	}
 	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
 	return forms
@@ -169,7 +181,7 @@ func omitIfSecretSurvives(text string, secrets ...string) string {
 		var next []string
 		for _, view := range views {
 			for _, secret := range present {
-				if strings.Contains(view, secret) {
+				if containsFold(view, secret) {
 					return credentialOmittedMessage
 				}
 			}
@@ -337,7 +349,22 @@ func validKeyText(key string) bool {
 	if key != strings.TrimSpace(key) {
 		return false
 	}
-	return !strings.ContainsFunc(key, func(r rune) bool { return r < 32 || r == 127 })
+	// Format characters (U+200B, U+FEFF, U+180E and the rest of Cf) are not
+	// Unicode spaces, so TrimSpace keeps them, and a key padded with one
+	// would be sent and could be quoted back in a transport error.
+	return !strings.ContainsFunc(key, func(r rune) bool {
+		return r < 32 || r == 127 || unicode.Is(unicode.Cf, r)
+	})
+}
+
+// containsFold reports whether text holds secret in any case. Comparing the
+// lowered copies avoids taking indexes from a string whose case-fold changed
+// length (U+0130).
+func containsFold(text, secret string) bool {
+	if secret == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(text), strings.ToLower(secret))
 }
 
 // readLimitedBody reads a JSON response body of at most maxJSONBodyBytes. A
@@ -572,9 +599,36 @@ func isFalsyAPISuccess(value interface{}) bool {
 	return false
 }
 
+// allowsMessageOnly is the set of results a bare message is a success for:
+// validate's greylist answer, the raw-JSON filter calls, every Inbox
+// Placement call, and the list-evaluator result. Those decode into
+// *ValidateResponse or *map[string]interface{}. ListFilters returns raw JSON
+// and never reaches here. Every other typed call rejects a message-only body
+// and an empty object.
+func allowsMessageOnly(dest interface{}) bool {
+	switch dest.(type) {
+	case *ValidateResponse, *map[string]interface{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func emptyJSONObject(body []byte) bool {
+	return string(bytes.Trim(body, " \t\r\n")) == "{}"
+}
+
 func decodeJSONBody(status int, contentType string, body []byte, dest interface{}) error {
 	if err := ensureJSONAPIBody(status, contentType, body); err != nil {
 		return err
+	}
+	if !allowsMessageOnly(dest) && emptyJSONObject(body) {
+		// Valid JSON of the wrong shape. The corpus accepts only this message
+		// for an object that parses and is not the call's result.
+		return statusError(status, unexpectedJSONShapeMessage)
+	}
+	if !allowsMessageOnly(dest) && messageOnlyBody(body) {
+		return apiError(status, messageFromBody(status, contentType, string(body)))
 	}
 	// The body is valid JSON (ensureJSONAPIBody), so this fails only when it
 	// is not the shape the call returns, e.g. a bare string or number.

@@ -338,7 +338,7 @@ not follow.`
 
 Bulk validation and scoring target the v2 bulk API. Docs: [v2 send file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-send-file), [v2 file status](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-file-status), [v2 get file](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file).
 
-Optional `CsvFile` fields for **validation** send only: `ReturnURL`, `AllowPhase2` (use a `*bool`; omit or leave nil to skip sending `allow_phase_2`). Status responses include `FilePhase2Status` when the API returns it.
+`CsvFile.ReturnURL` is sent for validation and scoring. `AllowPhase2` (use a `*bool`; omit or leave nil to skip sending `allow_phase_2`) is validation send only. Status responses include `FilePhase2Status` when the API returns it.
 
 Optional [v2 getfile](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file) query parameters: `GetFileOptions` with `DownloadType` pointing at `DownloadTypePhase1`, `DownloadTypePhase2`, or `DownloadTypeCombined`, and `ActivityData` (`*bool`) for **validation** getfile only (`AiScoringResultWithOptions` does not send `activity_data`). Use `BulkValidationResultWithOptions`, `AiScoringResultWithOptions`, or `GenericResultFetchWithOptions`.
 
@@ -796,8 +796,9 @@ bound to one team and sent in an `API-Key` header. Use a `WarmupClient` for it.
 The client does not use the validation key, `Initialize`, or `SetURI`, and the
 validation functions never see the Warmup key.
 
-`NewWarmupClient(apiKey, baseURL)` rejects an empty key, and a base URL that is
-not `https://`; pass `""` for the default host. Methods return the decoded JSON
+`NewWarmupClient(apiKey, baseURL)` rejects an empty key and a base URL that is
+not `https://` (plain `http://` is allowed only to `127.0.0.1`, `localhost` and
+`[::1]`). A URL with userinfo is refused. Pass `""` for the default host. Methods return the decoded JSON
 as a `map[string]interface{}` (a list answer is wrapped under `"data"`),
 `DownloadSeeds` and `DownloadStatistics` return CSV text, and a failed call is a
 `*ZBApiError` with the HTTP status (for example 429 while a custom engagement
@@ -916,7 +917,7 @@ import (
 func main() {
 	zerobouncego.Initialize("... Your API KEY ...")
 
-	response, error_ := zerobouncego.FindEmail("example.com", "John", "", "Doe")
+	response, error_ := zerobouncego.FindEmailByDomainFirstLastName("example.com", "John", "Doe")
 	if error_ != nil {
 		fmt.Println(error_.Error())
 		return
@@ -938,7 +939,7 @@ import (
 
 func main() {
 	zerobouncego.Initialize("... Your API KEY ...")
-	response, error_ := zerobouncego.DomainSearch("example.com")
+	response, error_ := zerobouncego.DomainSearchByDomain("example.com")
 	if error_ != nil {
 		fmt.Println(error_.Error())
 		return
