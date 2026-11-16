@@ -144,6 +144,7 @@ func (c *WarmupClient) sendBody(download bool, method, path string, params url.V
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("%s", c.redact(err.Error(), secrets...))
 	}
+	rememberKey(c.key())
 	request.Header.Set("API-Key", c.key())
 	request.Header.Set("Accept", CONTENT_TYPE_JSON)
 	if body != nil {
@@ -152,8 +153,10 @@ func (c *WarmupClient) sendBody(download bool, method, path string, params url.V
 
 	response, err := c.client.Do(request)
 	if err != nil {
-		// Rebuilt rather than wrapped: the original holds the URL and headers.
-		return 0, nil, nil, fmt.Errorf("%s", c.redact(err.Error(), secrets...))
+		// The transport masked the SDK's own credentials; Warmup's key and its
+		// call's secrets are masked here. An error without a secret is returned
+		// as it is (errors.Is, net.Error).
+		return 0, nil, nil, redactTransportError(err, append([]string{c.key()}, secrets...)...)
 	}
 	defer response.Body.Close()
 

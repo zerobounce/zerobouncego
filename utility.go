@@ -1,9 +1,14 @@
 package zerobouncego
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -536,12 +541,12 @@ func (t errorTransport) RoundTrip(request *http.Request) (*http.Response, error)
 	return nil, t.err
 }
 
-// redactingTransport hides the request's credentials in a transport error. A
-// caller's transport (a mock, a proxy wrapper) may quote the request URL or
-// headers in its error ("no responder found for URL ..."), and that text
-// would reach the caller through err.Error() and errors.Unwrap. The error is
-// replaced only when it holds a credential, so every other error is returned
-// as it is.
+// redactingTransport hides every credential the SDK knows in a transport
+// error. A caller's transport (a mock, a proxy wrapper) may quote the request
+// URL, headers or body in its error ("no responder found for URL ...", a
+// httputil.DumpRequestOut), and that text would reach the caller through
+// err.Error(). The error is replaced only when it holds a credential, so every
+// other error is returned as it is.
 type redactingTransport struct{ inner http.RoundTripper }
 
 func (t redactingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -549,54 +554,200 @@ func (t redactingTransport) RoundTrip(request *http.Request) (*http.Response, er
 	if err == nil {
 		return response, nil
 	}
-	text := err.Error()
-	secrets := requestSecrets(request)
-	redacted := omitIfSecretSurvives(maskSecrets(text, secrets...), secrets...)
-	redacted = apiKeyInText.ReplaceAllString(redacted, "${1}REDACTED")
-	if redacted == text {
-		return response, err
-	}
-	return response, &redactedTransportError{message: redacted, cause: err}
+	return response, redactTransportError(err, requestSecrets(request)...)
 }
 
-// redactedTransportError carries the redacted text of a transport error. It
-// has no Unwrap (the cause's text holds the credential); errors.Is and the
-// net.Error methods still see the cause.
+// transport error kinds a redacted error still answers errors.Is for.
+var redactedSentinels = []error{context.DeadlineExceeded, context.Canceled, os.ErrDeadlineExceeded, net.ErrClosed}
+
+// redactTransportError returns err untouched when its text holds no secret.
+// Otherwise it returns a redactedTransportError: the masked text, and none of
+// the cause (a value-typed cause would print the secret under %#v), only what
+// callers branch on: Timeout, Temporary and the sentinels above.
+func redactTransportError(err error, extra ...string) error {
+	secrets := append(knownKeys(), extra...)
+	text := err.Error()
+	redacted := omitIfSecretSurvives(maskSecrets(text, secrets...), secrets...)
+	redacted = redactAPIKeyParams(redacted)
+	if redacted == text {
+		return err
+	}
+	out := &redactedTransportError{message: redacted}
+	out.timeout = anyLayer(err, func(e error) bool {
+		t, ok := e.(interface{ Timeout() bool })
+		return ok && t.Timeout()
+	})
+	out.temporary = anyLayer(err, func(e error) bool {
+		t, ok := e.(interface{ Temporary() bool })
+		return ok && t.Temporary()
+	})
+	for i, sentinel := range redactedSentinels {
+		if errors.Is(err, sentinel) {
+			out.sentinels |= 1 << uint(i)
+		}
+	}
+	out.safe = safeLayers(err, secrets)
+	return out
+}
+
+// safeLayers lists the errors in err's chain whose text and Go-syntax print
+// hold no secret: those cannot leak, and keeping them lets errors.Is find a
+// caller's own sentinel behind a transport that quoted the request.
+func safeLayers(err error, secrets []string) []error {
+	var safe []error
+	var walk func(e error, depth int)
+	walk = func(e error, depth int) {
+		if e == nil || depth > 16 {
+			return
+		}
+		clean := true
+		for _, text := range []string{fmt.Sprintf("%v", e), fmt.Sprintf("%+v", e), fmt.Sprintf("%#v", e)} {
+			if maskSecrets(text, secrets...) != text || omitIfSecretSurvives(text, secrets...) != text || redactAPIKeyParams(text) != text {
+				clean = false
+			}
+		}
+		if clean {
+			safe = append(safe, e)
+		}
+		switch u := e.(type) {
+		case interface{ Unwrap() error }:
+			walk(u.Unwrap(), depth+1)
+		case interface{ Unwrap() []error }:
+			for _, inner := range u.Unwrap() {
+				walk(inner, depth+1)
+			}
+		}
+	}
+	walk(err, 0)
+	return safe
+}
+
+// anyLayer reports whether test holds for any error in err's chain.
+func anyLayer(err error, test func(error) bool) bool {
+	if err == nil {
+		return false
+	}
+	if test(err) {
+		return true
+	}
+	switch u := err.(type) {
+	case interface{ Unwrap() error }:
+		return anyLayer(u.Unwrap(), test)
+	case interface{ Unwrap() []error }:
+		for _, inner := range u.Unwrap() {
+			if anyLayer(inner, test) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// knownKeys lists every API key this process holds or has sent.
+func knownKeys() []string {
+	keys := []string{API_KEY}
+	sentKeys.Range(func(key, _ interface{}) bool {
+		keys = append(keys, key.(string))
+		return true
+	})
+	return keys
+}
+
+// redactedTransportError carries the redacted text of a transport error and
+// nothing of its cause (the cause's text, and possibly its fields, hold the
+// credential). errors.Is and the net.Error methods answer from what was
+// recorded when the cause was seen.
 type redactedTransportError struct {
-	message string
-	cause   error
+	message   string
+	timeout   bool
+	temporary bool
+	sentinels uint8
+	safe      []error
 }
 
 func (e *redactedTransportError) Error() string { return e.message }
 
-func (e *redactedTransportError) Is(target error) bool { return errors.Is(e.cause, target) }
-
-func (e *redactedTransportError) Timeout() bool {
-	var netErr net.Error
-	return errors.As(e.cause, &netErr) && netErr.Timeout()
+func (e *redactedTransportError) Is(target error) bool {
+	for _, layer := range e.safe {
+		if errors.Is(layer, target) {
+			return true
+		}
+	}
+	for i, sentinel := range redactedSentinels {
+		if e.sentinels&(1<<uint(i)) != 0 && target == sentinel {
+			return true
+		}
+	}
+	return false
 }
 
-func (e *redactedTransportError) Temporary() bool {
-	var tempErr interface{ Temporary() bool }
-	return errors.As(e.cause, &tempErr) && tempErr.Temporary()
-}
+func (e *redactedTransportError) Timeout() bool { return e.timeout }
+
+func (e *redactedTransportError) Temporary() bool { return e.temporary }
 
 // requestSecrets lists the credentials a request carries: the api_key query
-// value, the API-Key header and an api_key form field in a replayable body.
+// value (any spelling of the name), the API-Key header, the Authorization
+// bearer value, and an api_key field of a replayable body (form, JSON or
+// multipart). Keys the SDK remembers are masked as well (knownKeys), which
+// covers a body that cannot be replayed.
 func requestSecrets(request *http.Request) []string {
 	var secrets []string
 	if request.URL != nil {
-		secrets = append(secrets, request.URL.Query()["api_key"]...)
+		for name, values := range request.URL.Query() {
+			if isAPIKeyName(name) {
+				secrets = append(secrets, values...)
+			}
+		}
 	}
 	if key := request.Header.Get("API-Key"); key != "" {
 		secrets = append(secrets, key)
+	}
+	if auth := strings.TrimSpace(request.Header.Get("Authorization")); auth != "" {
+		if len(auth) > 7 && strings.EqualFold(auth[:7], "bearer ") {
+			auth = strings.TrimSpace(auth[7:])
+		}
+		secrets = append(secrets, auth)
 	}
 	if request.GetBody != nil {
 		if body, err := request.GetBody(); err == nil {
 			raw, _ := io.ReadAll(io.LimitReader(body, 1<<20))
 			body.Close()
-			if form, err := url.ParseQuery(string(raw)); err == nil {
-				secrets = append(secrets, form["api_key"]...)
+			secrets = append(secrets, bodySecrets(request.Header.Get("Content-Type"), raw)...)
+		}
+	}
+	return secrets
+}
+
+func isAPIKeyName(name string) bool { return strings.EqualFold(name, "api_key") }
+
+// bodySecrets reads the api_key field of a form, JSON or multipart body.
+func bodySecrets(contentType string, raw []byte) []string {
+	var secrets []string
+	if form, err := url.ParseQuery(string(raw)); err == nil {
+		for name, values := range form {
+			if isAPIKeyName(name) {
+				secrets = append(secrets, values...)
+			}
+		}
+	}
+	var object map[string]interface{}
+	if json.Unmarshal(raw, &object) == nil {
+		for name, value := range object {
+			if text, ok := value.(string); ok && isAPIKeyName(name) {
+				secrets = append(secrets, text)
+			}
+		}
+	}
+	if mediaType, params, err := mime.ParseMediaType(contentType); err == nil && strings.HasPrefix(mediaType, "multipart/") {
+		reader := multipart.NewReader(bytes.NewReader(raw), params["boundary"])
+		for {
+			part, err := reader.NextPart()
+			if err != nil {
+				break
+			}
+			if isAPIKeyName(part.FormName()) {
+				value, _ := io.ReadAll(io.LimitReader(part, 1<<16))
+				secrets = append(secrets, string(value))
 			}
 		}
 	}
@@ -633,9 +784,40 @@ func timedHTTPClient() *http.Client {
 	return c
 }
 
-// apiKeyInText matches an api_key=<value> pair anywhere in a string, whatever
-// surrounds it: the value runs to the next &, # or white space.
-var apiKeyInText = regexp.MustCompile(`(?i)(api(?:_|%5f)key=)[^&#\s]*`)
+// apiKeyName matches a parameter name followed by '='. The value is scanned
+// separately (redactAPIKeyParams) so that one pair never swallows the next.
+var apiKeyName = regexp.MustCompile(`[A-Za-z0-9_%+.\-]+=`)
+
+// redactAPIKeyParams masks the value of every name=value pair in text whose
+// name, percent-decoded, is api_key in any case (or ends with it), so
+// "?%61pi_key=<key>" is masked as well as "?api_key=<key>". The value ends at
+// the first character that cannot belong to it (&, #, ;, ':', white space, a
+// quote), so the text after it keeps its punctuation.
+func redactAPIKeyParams(text string) string {
+	var out strings.Builder
+	last := 0
+	for _, at := range apiKeyName.FindAllStringIndex(text, -1) {
+		if at[0] < last {
+			continue
+		}
+		name := text[at[0] : at[1]-1]
+		if decoded, err := url.QueryUnescape(name); err == nil {
+			name = decoded
+		}
+		if !strings.HasSuffix(strings.ToLower(name), "api_key") {
+			continue
+		}
+		end := at[1]
+		for end < len(text) && !strings.ContainsRune("&#;: \t\r\n\f\v\"'", rune(text[end])) {
+			end++
+		}
+		out.WriteString(text[last:at[1]])
+		out.WriteString("REDACTED")
+		last = end
+	}
+	out.WriteString(text[last:])
+	return out.String()
+}
 
 // redactAPIKey masks the api_key value of a request URL. It masks the parsed
 // query value, and then, as a backstop for a URL the parser reads differently
@@ -651,7 +833,7 @@ func redactAPIKey(rawURL string) string {
 		parsed.RawQuery = query.Encode()
 		rawURL = parsed.String()
 	}
-	return apiKeyInText.ReplaceAllString(rawURL, "${1}REDACTED")
+	return redactAPIKeyParams(rawURL)
 }
 
 func httpGet(requestURL string) (*http.Response, error) {

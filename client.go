@@ -73,13 +73,13 @@ func redactedURL(raw string) string {
 		if strings.Contains(raw, "@") {
 			return "(url redacted)"
 		}
-		return apiKeyInText.ReplaceAllString(raw, "${1}REDACTED")
+		return redactAPIKeyParams(raw)
 	}
 	if parsed.User != nil {
 		parsed.User = url.User("***")
 		raw = parsed.String()
 	}
-	return apiKeyInText.ReplaceAllString(raw, "${1}REDACTED")
+	return redactAPIKeyParams(raw)
 }
 
 // formatRedacted prints a value through its String or GoString, so no verb

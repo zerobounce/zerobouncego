@@ -292,7 +292,8 @@ not follow.`
 Requests time out after 120 seconds (or `http.DefaultClient.Timeout` when it is
 set). To cancel sooner, set a shorter `http.DefaultClient.Timeout` or install a
 custom `http.DefaultTransport` / `http.DefaultClient.Transport` that enforces
-your own deadline.
+your own deadline. A `WarmupClient` copies `http.DefaultClient`'s timeout and
+transport when `NewWarmupClient` runs, so set them before creating it.
 
 JSON responses are read up to 2 MiB; a larger body is an error. File downloads
 are not capped. A nil `io.Writer` passed to a result download is refused with
