@@ -40,11 +40,13 @@ const warmupAnyTeamID = 1
 
 // WarmupClient is one Warmup API key. The key is bound to one team.
 type WarmupClient struct {
-	// apiKey is a function, not a string: fmt prints an unexported struct
+	// apiKey is a *string, not a string: fmt prints an unexported struct
 	// field by reflection, so a WarmupClient stored by value in another
-	// struct would print a string key through %v, %+v, %#v, %s and %q, but
-	// prints only an address for a function.
-	apiKey func() string
+	// struct would print a string key through %v, %+v, %#v, %s and %q. A
+	// pointer to a string prints only as an address under every verb (a
+	// pointer to a struct would print its fields under %s and %q), and a
+	// pointer keeps WarmupClient comparable, as it was in v3.0.1.
+	apiKey *string
 	root   string
 	client *http.Client
 }
@@ -54,11 +56,11 @@ func (c WarmupClient) key() string {
 	if c.apiKey == nil {
 		return ""
 	}
-	return c.apiKey()
+	return *c.apiKey
 }
 
-// keyHolder returns a function that yields key, for WarmupClient.apiKey.
-func keyHolder(key string) func() string { return func() string { return key } }
+// keyHolder returns the holder for WarmupClient.apiKey.
+func keyHolder(key string) *string { return &key }
 
 // NewWarmupClient builds a client for a Warmup API key. An empty baseURL uses
 // WarmupDefaultBaseURL.
@@ -89,7 +91,7 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 
 // String names the type and its base URL, with the API key redacted.
 func (c WarmupClient) String() string {
-	return fmt.Sprintf("WarmupClient{apiKey:%q, root:%q}", redactedKey(c.key()), redactedURL(c.root))
+	return fmt.Sprintf("WarmupClient{apiKey:%q, root:%q}", redactedKey(c.key()), redactedURLFor(c.root, c.key()))
 }
 
 // GoString is String in Go syntax (%#v), with the API key redacted.

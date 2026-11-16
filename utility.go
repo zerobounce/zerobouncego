@@ -569,7 +569,10 @@ func redactTransportError(err error, extra ...string) error {
 	text := err.Error()
 	redacted := omitIfSecretSurvives(maskSecrets(text, secrets...), secrets...)
 	redacted = redactAPIKeyParams(redacted)
-	if redacted == text {
+	// Pass the error through only when no layer holds a secret in any verb:
+	// a clean Error() can sit on top of a cause whose fields hold the request
+	// (%#v of that layer would print the key).
+	if redacted == text && everyLayerClean(err, secrets) {
 		return err
 	}
 	out := &redactedTransportError{message: redacted}
@@ -593,6 +596,42 @@ func redactTransportError(err error, extra ...string) error {
 // safeLayers lists the errors in err's chain whose text and Go-syntax print
 // hold no secret: those cannot leak, and keeping them lets errors.Is find a
 // caller's own sentinel behind a transport that quoted the request.
+// layerIsClean reports whether one error value shows no secret in %v, %+v or
+// %#v (the last one prints unexported fields, such as a dumped request).
+func layerIsClean(e error, secrets []string) bool {
+	for _, text := range []string{fmt.Sprintf("%v", e), fmt.Sprintf("%+v", e), fmt.Sprintf("%#v", e)} {
+		if maskSecrets(text, secrets...) != text || omitIfSecretSurvives(text, secrets...) != text || redactAPIKeyParams(text) != text {
+			return false
+		}
+	}
+	return true
+}
+
+// everyLayerClean reports whether err and every error it wraps are clean.
+func everyLayerClean(err error, secrets []string) bool {
+	clean := true
+	var walk func(e error, depth int)
+	walk = func(e error, depth int) {
+		if e == nil || !clean {
+			return
+		}
+		if depth > 16 || !layerIsClean(e, secrets) {
+			clean = false
+			return
+		}
+		switch u := e.(type) {
+		case interface{ Unwrap() error }:
+			walk(u.Unwrap(), depth+1)
+		case interface{ Unwrap() []error }:
+			for _, inner := range u.Unwrap() {
+				walk(inner, depth+1)
+			}
+		}
+	}
+	walk(err, 0)
+	return clean
+}
+
 func safeLayers(err error, secrets []string) []error {
 	var safe []error
 	var walk func(e error, depth int)
@@ -600,13 +639,7 @@ func safeLayers(err error, secrets []string) []error {
 		if e == nil || depth > 16 {
 			return
 		}
-		clean := true
-		for _, text := range []string{fmt.Sprintf("%v", e), fmt.Sprintf("%+v", e), fmt.Sprintf("%#v", e)} {
-			if maskSecrets(text, secrets...) != text || omitIfSecretSurvives(text, secrets...) != text || redactAPIKeyParams(text) != text {
-				clean = false
-			}
-		}
-		if clean {
+		if layerIsClean(e, secrets) {
 			safe = append(safe, e)
 		}
 		switch u := e.(type) {

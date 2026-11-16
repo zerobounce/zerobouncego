@@ -67,6 +67,15 @@ func redactedKey(key string) string {
 // value of an api_key query parameter, in any case (?api_key=abc prints as
 // ?api_key=REDACTED). A URL that does not parse and holds an @ is not printed
 // at all.
+// redactedURLFor is redactedURL that also masks the client's own key
+// wherever it appears in the URL (path, another parameter, a fragment).
+func redactedURLFor(raw, key string) string {
+	if strings.TrimSpace(key) == "" {
+		return redactedURL(raw)
+	}
+	return maskSecrets(redactedURL(raw), key)
+}
+
 func redactedURL(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -94,7 +103,7 @@ func formatRedacted(state fmt.State, verb rune, text, goText string) {
 
 // String names the type and its fields, with the API key redacted.
 func (c Client) String() string {
-	return fmt.Sprintf("Client{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), redactedURL(c.URI), redactedURL(c.BulkURI))
+	return fmt.Sprintf("Client{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), redactedURLFor(c.URI, c.APIKey), redactedURLFor(c.BulkURI, c.APIKey))
 }
 
 // GoString is String in Go syntax (%#v), with the API key redacted.
@@ -110,7 +119,7 @@ func (c Client) Format(state fmt.State, verb rune) {
 
 // String names the type and its fields, with the API key redacted.
 func (c RequestConfig) String() string {
-	return fmt.Sprintf("RequestConfig{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), redactedURL(c.URI), redactedURL(c.BulkURI))
+	return fmt.Sprintf("RequestConfig{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), redactedURLFor(c.URI, c.APIKey), redactedURLFor(c.BulkURI, c.APIKey))
 }
 
 // GoString is String in Go syntax (%#v), with the API key redacted.
@@ -131,7 +140,7 @@ type redactedConfig struct {
 }
 
 func redactedConfigOf(key, uri, bulk string) redactedConfig {
-	return redactedConfig{APIKey: redactedKey(key), URI: redactedURL(uri), BulkURI: redactedURL(bulk)}
+	return redactedConfig{APIKey: redactedKey(key), URI: redactedURLFor(uri, key), BulkURI: redactedURLFor(bulk, key)}
 }
 
 // MarshalJSON keeps the API key out of json.Marshal, including when a Client

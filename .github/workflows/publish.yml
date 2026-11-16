@@ -159,7 +159,9 @@ jobs:
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists, skipping."
           else
+            # --verify-tag: fail if the tag is gone instead of creating one at main.
             gh release create "$TAG" \
+              --verify-tag \
               --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" \
               --generate-notes
