@@ -295,7 +295,7 @@ func TestEveryRequestRejectsPaddedOrControlCharacterKey(t *testing.T) {
 
 // offlineExports are the exported functions and methods that send nothing.
 var offlineExports = map[string]bool{
-	"Getenv": true, "Initialize": true, "InitializeWithURI": true, "SetApiKey": true, "SetURI": true,
+	"Getenv": true, "Initialize": true, "InitializeWithURI": true, "InitializeWithURIChecked": true, "SetApiKey": true, "SetURI": true,
 	"LoadEnvFromFile": true, "PrepareURL": true, "ErrorFromResponse": true, "ImportCsvFile": true,
 	"GetFileJSONIndicatesError": true, "FormatGetFileErrorMessage": true, "New": true, "NewWarmupClient": true,
 	"Client.String": true, "Client.GoString": true, "Client.Format": true,

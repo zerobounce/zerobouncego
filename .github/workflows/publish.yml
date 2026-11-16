@@ -20,6 +20,7 @@ jobs:
   validate-tag:
     outputs:
       tag_sha: ${{ steps.tag_sha.outputs.sha }}
+      module: ${{ steps.tag_sha.outputs.module }}
     name: Validate tag
     runs-on: ubuntu-latest
     steps:
@@ -83,6 +84,8 @@ jobs:
         run: |
           SHA=$(git rev-parse "refs/tags/$TAG^{commit}")
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          MODULE=$(grep '^module ' go.mod | awk '{print $2}')
+          echo "module=$MODULE" >> "$GITHUB_OUTPUT"
 
   test:
     name: Test
@@ -164,16 +167,17 @@ jobs:
 
   verify-proxy:
     name: Verify pkg.go.dev proxy
-    needs: [release]
+    needs: [validate-tag, release]
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     steps:
       - name: Wait for proxy.golang.org to index tag
         env:
           TAG: ${{ github.event.inputs.tag }}
+          MODULE: ${{ needs.validate-tag.outputs.module }}
         run: |
           set -euo pipefail
-          URL="https://proxy.golang.org/github.com/zerobounce/zerobouncego/v3/@v/${TAG}.info"
+          URL="https://proxy.golang.org/${MODULE}/@v/${TAG}.info"
           echo "Checking $URL"
           for i in $(seq 1 20); do
             CODE=$(curl -sS -o /dev/null -w '%{http_code}' "$URL" || true)
@@ -186,5 +190,5 @@ jobs:
           done
           echo "Warning: proxy did not return 200 for $TAG within 5 minutes."
           echo "pkg.go.dev may still index shortly; verify manually:"
-          echo "  go get github.com/zerobounce/zerobouncego/v3@${TAG}"
+          echo "  go get ${MODULE}@${TAG}"
           exit 1

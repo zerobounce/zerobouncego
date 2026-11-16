@@ -3,6 +3,7 @@ package zerobouncego
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -152,8 +153,17 @@ func Initialize(new_api_key_value string) {
 	URI = Getenv(`ZERO_BOUNCE_URI`, zbApiURLValue[ZB_API_URL_DEFAULT])
 }
 
-// Initialize the API key and the URI explicitly
-func InitializeWithURI(new_api_key_value string, zbApiURL ZbApiURL) error {
+// InitializeWithURI sets the API key and the URI explicitly. If zbApiURL is not
+// one of the ZB_API_URL_* constants it changes nothing: the API key and the URI
+// stay as they were. Use InitializeWithURIChecked to be told about it.
+func InitializeWithURI(new_api_key_value string, zbApiURL ZbApiURL) {
+	_ = InitializeWithURIChecked(new_api_key_value, zbApiURL)
+}
+
+// InitializeWithURIChecked is InitializeWithURI that returns an error
+// ("invalid parameter: api url") when zbApiURL is not one of the ZB_API_URL_*
+// constants. In that case the API key and the URI are left unchanged.
+func InitializeWithURIChecked(new_api_key_value string, zbApiURL ZbApiURL) error {
 	uri, ok := zbApiURLValue[zbApiURL]
 	if !ok || uri == "" {
 		return fmt.Errorf("invalid parameter: api url")
@@ -526,6 +536,73 @@ func (t errorTransport) RoundTrip(request *http.Request) (*http.Response, error)
 	return nil, t.err
 }
 
+// redactingTransport hides the request's credentials in a transport error. A
+// caller's transport (a mock, a proxy wrapper) may quote the request URL or
+// headers in its error ("no responder found for URL ..."), and that text
+// would reach the caller through err.Error() and errors.Unwrap. The error is
+// replaced only when it holds a credential, so every other error is returned
+// as it is.
+type redactingTransport struct{ inner http.RoundTripper }
+
+func (t redactingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	response, err := t.inner.RoundTrip(request)
+	if err == nil {
+		return response, nil
+	}
+	text := err.Error()
+	secrets := requestSecrets(request)
+	redacted := omitIfSecretSurvives(maskSecrets(text, secrets...), secrets...)
+	redacted = apiKeyInText.ReplaceAllString(redacted, "${1}REDACTED")
+	if redacted == text {
+		return response, err
+	}
+	return response, &redactedTransportError{message: redacted, cause: err}
+}
+
+// redactedTransportError carries the redacted text of a transport error. It
+// has no Unwrap (the cause's text holds the credential); errors.Is and the
+// net.Error methods still see the cause.
+type redactedTransportError struct {
+	message string
+	cause   error
+}
+
+func (e *redactedTransportError) Error() string { return e.message }
+
+func (e *redactedTransportError) Is(target error) bool { return errors.Is(e.cause, target) }
+
+func (e *redactedTransportError) Timeout() bool {
+	var netErr net.Error
+	return errors.As(e.cause, &netErr) && netErr.Timeout()
+}
+
+func (e *redactedTransportError) Temporary() bool {
+	var tempErr interface{ Temporary() bool }
+	return errors.As(e.cause, &tempErr) && tempErr.Temporary()
+}
+
+// requestSecrets lists the credentials a request carries: the api_key query
+// value, the API-Key header and an api_key form field in a replayable body.
+func requestSecrets(request *http.Request) []string {
+	var secrets []string
+	if request.URL != nil {
+		secrets = append(secrets, request.URL.Query()["api_key"]...)
+	}
+	if key := request.Header.Get("API-Key"); key != "" {
+		secrets = append(secrets, key)
+	}
+	if request.GetBody != nil {
+		if body, err := request.GetBody(); err == nil {
+			raw, _ := io.ReadAll(io.LimitReader(body, 1<<20))
+			body.Close()
+			if form, err := url.ParseQuery(string(raw)); err == nil {
+				secrets = append(secrets, form["api_key"]...)
+			}
+		}
+	}
+	return secrets
+}
+
 // timedHTTPClient returns a fresh client: no cookie jar (a global
 // http.DefaultClient.Jar must not receive or send cookies), the SDK's own
 // transport and the request timeout.
@@ -547,7 +624,7 @@ func timedHTTPClient() *http.Client {
 	if c.Timeout == 0 {
 		c.Timeout = httpTimeout
 	}
-	c.Transport = httpsOnlyTransport{base: http.DefaultClient.Transport}
+	c.Transport = redactingTransport{inner: httpsOnlyTransport{base: http.DefaultClient.Transport}}
 	// A 3xx must not be followed. The API key is in the query string, and a
 	// redirect could send it to another host.
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {

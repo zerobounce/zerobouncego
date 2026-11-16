@@ -202,7 +202,7 @@ func bulkRootResultFetch(baseURL, fileID string, fileWriter io.Writer) error {
 	}
 	defer responseHTTP.Body.Close()
 
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readDownloadBody(responseHTTP.Body, responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"))
 	if err != nil {
 		return err
 	}

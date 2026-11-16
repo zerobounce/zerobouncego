@@ -380,8 +380,12 @@ func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *G
 	}
 	defer response_http.Body.Close()
 
-	body, err := io.ReadAll(response_http.Body)
+	body, err := readDownloadBody(response_http.Body, response_http.StatusCode, response_http.Header.Get("Content-Type"))
 	if err != nil {
+		var apiErr *ZBApiError
+		if errors.As(err, &apiErr) {
+			return err
+		}
 		return fmt.Errorf("could not read response body: %w", err)
 	}
 

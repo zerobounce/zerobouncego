@@ -107,8 +107,16 @@ func (c *WarmupClient) redact(text string, secrets ...string) string {
 	return omitIfSecretSurvives(maskSecrets(text, all...), all...)
 }
 
-// send performs one Warmup request and returns the status and body.
+// send performs one Warmup request and returns the status and body. A body
+// over 2 MiB is refused (these are JSON calls).
 func (c *WarmupClient) send(method, path string, params url.Values, body interface{}, secrets ...string) (int, []byte, http.Header, error) {
+	return c.sendBody(false, method, path, params, body, secrets...)
+}
+
+// sendBody is send; with download set, a 2xx body that is a file (the CSV
+// downloads) is read whole, whatever its size. Any other body keeps the 2 MiB
+// limit (see readDownloadBody).
+func (c *WarmupClient) sendBody(download bool, method, path string, params url.Values, body interface{}, secrets ...string) (int, []byte, http.Header, error) {
 	// Every send checks the base again: root is not reachable from outside the
 	// package, but the check is cheap and the send is the authority.
 	if err := requireHTTPSBase(c.root); err != nil {
@@ -155,7 +163,12 @@ func (c *WarmupClient) send(method, path string, params url.Values, body interfa
 			Message:    redirectRefusedMessage,
 		}
 	}
-	payload, err := readLimitedBody(response.Body, response.StatusCode)
+	var payload []byte
+	if download {
+		payload, err = readDownloadBody(response.Body, response.StatusCode, response.Header.Get("Content-Type"))
+	} else {
+		payload, err = readLimitedBody(response.Body, response.StatusCode)
+	}
 	if err != nil {
 		if apiErr, ok := err.(*ZBApiError); ok {
 			return response.StatusCode, nil, response.Header, apiErr
@@ -206,7 +219,7 @@ func (c *WarmupClient) json(method, path string, params url.Values, body interfa
 
 // csv returns a download body as text.
 func (c *WarmupClient) csv(path string, params url.Values) (string, error) {
-	status, payload, header, err := c.send("GET", path, params, nil)
+	status, payload, header, err := c.sendBody(true, "GET", path, params, nil)
 	if err != nil {
 		return "", err
 	}

@@ -585,6 +585,34 @@ func readLimitedBody(reader io.Reader, statusCode int) ([]byte, error) {
 	return body, nil
 }
 
+// readDownloadBody reads a download response. A 2xx result file is returned
+// whole, whatever its size (downloads are not capped). Every other body is
+// read with the maxJSONBodyBytes limit, as readLimitedBody does, and so is a
+// 2xx body that is not a file (HTML, or JSON, which the callers report as an
+// error): an oversized one is a *ZBApiError with the response's status.
+func readDownloadBody(reader io.Reader, statusCode int, contentType string) ([]byte, error) {
+	if statusCode < 200 || statusCode > 299 {
+		return readLimitedBody(reader, statusCode)
+	}
+	head, err := io.ReadAll(io.LimitReader(reader, maxJSONBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(head) <= maxJSONBodyBytes {
+		return head, nil
+	}
+	// Past the cap: only a body that is a file stays uncapped.
+	headText := string(head)
+	if contentTypeIsHTML(contentType) || bodyLooksLikeHTML(headText) || shouldTreatGetFileBodyAsError(headText, contentType) {
+		return nil, &ZBApiError{StatusCode: statusCode, Message: oversizeBodyMessage}
+	}
+	rest, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	return append(head, rest...), nil
+}
+
 func bodyLooksLikeHTML(body string) bool {
 	sample := body
 	if len(sample) > 2000 {

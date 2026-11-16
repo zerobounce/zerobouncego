@@ -54,7 +54,7 @@ func TestABodyOverTheSizeCapKeepsItsStatus(t *testing.T) {
 		calls := publicRequestCalls(client, warmup)
 		capped := 0
 		for _, call := range calls {
-			// The file downloads stream to disk and the Warmup client reads
+			// The file downloads stream to disk and the Warmup CSV downloads read
 			// without a cap; at a 2xx they are checked by their own tests.
 			if status < 300 && (downloads[call.name] || strings.HasPrefix(call.name, "WarmupClient.")) {
 				continue

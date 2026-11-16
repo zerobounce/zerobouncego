@@ -152,11 +152,36 @@ func TestInitializeWithURIRejectsAnUnknownConstant(t *testing.T) {
 	})
 	API_KEY = "kept-key"
 	URI = "https://kept.example/v2/"
-	if err := InitializeWithURI("other-key", ZbApiURL(99)); err == nil {
+	if err := InitializeWithURIChecked("other-key", ZbApiURL(99)); err == nil {
 		t.Fatal("unknown constant was accepted")
+	} else if err.Error() != "invalid parameter: api url" {
+		t.Fatalf("error text %q", err.Error())
 	}
 	if API_KEY != "kept-key" || URI != "https://kept.example/v2/" {
 		t.Fatalf("state changed: key %q uri %q", API_KEY, URI)
+	}
+}
+
+// InitializeWithURI keeps its v3.0.1 signature (no result) and, like the
+// Checked variant, leaves the key and the URI alone for an unknown constant.
+func TestInitializeWithURIUncheckedLeavesStateUnchanged(t *testing.T) {
+	previousKey, previousURI := API_KEY, URI
+	t.Cleanup(func() {
+		API_KEY = previousKey
+		URI = previousURI
+	})
+	API_KEY = "kept-key"
+	URI = "https://kept.example/v2/"
+	InitializeWithURI("other-key", ZbApiURL(99))
+	if API_KEY != "kept-key" || URI != "https://kept.example/v2/" {
+		t.Fatalf("state changed: key %q uri %q", API_KEY, URI)
+	}
+	InitializeWithURI("new-key", ZB_API_URL_USA)
+	if API_KEY != "new-key" || URI != zbApiURLValue[ZB_API_URL_USA] {
+		t.Fatalf("valid constant not applied: key %q uri %q", API_KEY, URI)
+	}
+	if err := InitializeWithURIChecked("checked-key", ZB_API_URL_USA); err != nil || API_KEY != "checked-key" {
+		t.Fatalf("checked variant: err %v key %q", err, API_KEY)
 	}
 }
 

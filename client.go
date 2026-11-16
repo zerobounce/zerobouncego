@@ -63,21 +63,23 @@ func redactedKey(key string) string {
 }
 
 // redactedURL prints a base URL without the password of its userinfo
-// (https://user:secret@host/ prints as https://***@host/). A URL that does not
-// parse and holds an @ is not printed at all.
+// (https://user:secret@host/ prints as https://***@host/) and without the
+// value of an api_key query parameter, in any case (?api_key=abc prints as
+// ?api_key=REDACTED). A URL that does not parse and holds an @ is not printed
+// at all.
 func redactedURL(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil {
 		if strings.Contains(raw, "@") {
 			return "(url redacted)"
 		}
-		return raw
+		return apiKeyInText.ReplaceAllString(raw, "${1}REDACTED")
 	}
-	if parsed.User == nil {
-		return raw
+	if parsed.User != nil {
+		parsed.User = url.User("***")
+		raw = parsed.String()
 	}
-	parsed.User = url.User("***")
-	return parsed.String()
+	return apiKeyInText.ReplaceAllString(raw, "${1}REDACTED")
 }
 
 // formatRedacted prints a value through its String or GoString, so no verb

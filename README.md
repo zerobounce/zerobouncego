@@ -32,10 +32,12 @@ zerobouncego.LoadEnvFromFile()
 ```
 3. by settings explicitly in code, using the following method, where a preferred URI can also be provided:
 ```go
-if err := zerobouncego.InitializeWithURI("mysecretapikey", zerobouncego.ZB_API_URL_DEFAULT); err != nil {
-    log.Fatal(err)
+if err := zerobouncego.InitializeWithURIChecked("mysecretapikey", zerobouncego.ZB_API_URL_DEFAULT); err != nil {
+    log.Fatal(err) // "invalid parameter: api url" for a value that is not a ZB_API_URL_* constant
 }
 ```
+`InitializeWithURI(key, url)` does the same without a return value; with an
+unknown URL it leaves the key and URI unchanged.
 
 `LoadEnvFromFile` loads `.env` and then calls `Initialize` with
 `ZEROBOUNCE_API_KEY` (or `ZERO_BOUNCE_API_KEY`), so it replaces a key set earlier
@@ -336,6 +338,16 @@ seconds: set it before the call (and before `NewWarmupClient`) to allow longer.
 Redirects are never followed, because the API key travels with the request; a
 3xx answer is the error `ZeroBounce returned a redirect, which this client does
 not follow.`
+
+**Timeouts and cancellation.** The SDK has no `context.Context` support yet.
+Requests time out after 120 seconds (or `http.DefaultClient.Timeout` when it is
+set). To cancel sooner, set a shorter `http.DefaultClient.Timeout` or install a
+custom `http.DefaultTransport` / `http.DefaultClient.Transport` that enforces
+your own deadline.
+
+JSON responses are read up to 2 MiB; a larger body is an error. File downloads
+are not capped. A nil `io.Writer` passed to a result download is refused with
+`empty parameter: file_writer` before anything is sent.
 
 #### Bulk API v2 (validation and getfile)
 
