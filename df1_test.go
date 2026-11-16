@@ -41,6 +41,8 @@ func TestFormatCharactersInAKeyAreRefused(t *testing.T) {
 		"abc\u200b", "\uFEFFabc", "abc\u180E",
 		"abc\u3164def", "abc\u2800", "abc\u034Fdef", "abc\u115F",
 		"abc\u0085", "abc\uFE00def",
+		"ab\u00A0c", "ab\u2028c", "ab\u2029c", "ab\u1680c", "ab\u3000c",
+		"ab\u180Bc", "ab\u180Fc", "ab\u2065c", "ab\uFFF0c", "ab\U000E0002c", "ab\U000E01F0c",
 	} {
 		client := New(key)
 		if _, err := client.Validate("a@b.com", ""); err == nil || !strings.Contains(err.Error(), "whitespace or control") {
@@ -113,7 +115,7 @@ func TestNegativeTimeoutIsRefused(t *testing.T) {
 }
 
 func TestHTTP2DebugRefusesToSend(t *testing.T) {
-	for _, value := range []string{"http2debug=2", "http2debug=0,http2debug=2", "http2debug=1"} {
+	for _, value := range []string{"http2debug=2", "http2debug=0,http2debug=2", "http2debug=1", "xhttp2debug=2", "x=http2debug=2"} {
 		t.Run(value, func(t *testing.T) {
 			fake := useFake(t)
 			t.Setenv("GODEBUG", value)
@@ -193,6 +195,57 @@ func TestLoadEnvFromFileDoesNotPrintTheLine(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "could not be read") {
 		t.Fatalf("stdout = %q", out)
+	}
+}
+
+func TestLoadEnvFromFileDoesNotPrintABadBaseURL(t *testing.T) {
+	dir := t.TempDir()
+	const secret = "zb-test-KEY-abcDEF123456"
+	body := "ZEROBOUNCE_API_KEY=other-key\nZERO_BOUNCE_URI=https://x.invalid/%zz" + secret + "\n"
+	if err := os.WriteFile(dir+"/.env", []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	previousKey, previousURI := API_KEY, URI
+	t.Cleanup(func() {
+		os.Chdir(previous)
+		API_KEY = previousKey
+		URI = previousURI
+		os.Unsetenv("ZEROBOUNCE_API_KEY")
+		os.Unsetenv("ZERO_BOUNCE_API_KEY")
+		os.Unsetenv("ZERO_BOUNCE_URI")
+		os.Unsetenv("ZERO_BOUNCE_BULK_URI")
+	})
+	old := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = writer
+	ok := LoadEnvFromFile()
+	writer.Close()
+	os.Stdout = old
+	out, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("env file was not loaded")
+	}
+	if strings.Contains(string(out), secret) {
+		t.Fatalf("stdout quoted the URL: %s", out)
+	}
+	if !strings.Contains(string(out), "base URL was not applied") {
+		t.Fatalf("stdout = %q", out)
+	}
+	if URI != previousURI {
+		t.Fatalf("bad base URL was applied: %s", URI)
 	}
 }
 

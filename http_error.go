@@ -224,10 +224,54 @@ var secretDecoders = []func(string) string{
 func quoteDecoded(text string) string {
 	text = strings.ReplaceAll(text, `\'`, "'")
 	text = hexByteEscapesDecoded(text)
-	text = html.UnescapeString(text)
+	// html.UnescapeString matches a named entity in one case. &QUOT; is
+	// unescaped and &APOS; is not, so a secret that contains ' comes back
+	// when the entity name is upper-cased.
+	text = html.UnescapeString(htmlNamedEntitiesFolded(text))
 	text = strings.ReplaceAll(text, "''", "'")
 	text = strings.ReplaceAll(text, `""`, `"`)
 	return text
+}
+
+// htmlNamedEntitiesFolded lowercases the name of each &Name; entity.
+// Numeric references (&#39;, &#x27;) are left as they are.
+func htmlNamedEntitiesFolded(text string) string {
+	if !strings.Contains(text, "&") {
+		return text
+	}
+	var out strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] != '&' {
+			out.WriteByte(text[i])
+			continue
+		}
+		semi := strings.IndexByte(text[i:], ';')
+		if semi <= 1 {
+			out.WriteByte(text[i])
+			continue
+		}
+		name := text[i+1 : i+semi]
+		if name[0] == '#' || !lettersOnly(name) {
+			out.WriteString(text[i : i+semi+1])
+			i += semi
+			continue
+		}
+		out.WriteByte('&')
+		out.WriteString(strings.ToLower(name))
+		out.WriteByte(';')
+		i += semi
+	}
+	return out.String()
+}
+
+func lettersOnly(text string) bool {
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c < 'A' || (c > 'Z' && c < 'a') || c > 'z' {
+			return false
+		}
+	}
+	return text != ""
 }
 
 // hexByteEscapesDecoded turns \xHH and \XHH into that byte. A sequence that
@@ -382,12 +426,11 @@ func (c RequestConfig) requireKey() error {
 }
 
 // invalidKeyTextMessage is the error for a key validKeyText refuses.
-const invalidKeyTextMessage = "invalid parameter: api_key has surrounding whitespace or control characters, a format character, or an invisible character"
+const invalidKeyTextMessage = "invalid parameter: api_key has surrounding whitespace or control characters, whitespace inside the key, a format character, or an invisible character"
 
-// validKeyText reports whether a key has no surrounding whitespace and no
-// control, format or invisible characters. Such a key would be quoted,
-// unredacted, in the HTTP library's own error, or would be sent while looking
-// like a different key.
+// validKeyText reports whether a key has no whitespace and no control, format
+// or invisible characters. Such a key would be quoted, unredacted, in the
+// HTTP library's own error, or would be sent while looking like a different key.
 func validKeyText(key string) bool {
 	if key != strings.TrimSpace(key) {
 		return false
@@ -401,7 +444,10 @@ func validKeyText(key string) bool {
 // keeps them. The other runes are invisible but not in Cf: the default
 // ignorables, variation selectors, and the braille blank.
 func invalidKeyRune(r rune) bool {
-	if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+	// TrimSpace only sees the ends, so a Unicode space in the middle
+	// (U+00A0, U+2028, U+3000 and the rest) would be sent. An ordinary
+	// space is visible, so it is not treated as one of those.
+	if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (unicode.IsSpace(r) && r != ' ') {
 		return true
 	}
 	switch r {
@@ -411,7 +457,15 @@ func invalidKeyRune(r rune) bool {
 	if r >= 0xFE00 && r <= 0xFE0F {
 		return true
 	}
-	if r >= 0xE0100 && r <= 0xE01EF {
+	// Mongolian free variation selectors are marks, not format characters.
+	// The rest are default-ignorable and unassigned, so Cf does not match.
+	if r >= 0x180B && r <= 0x180F {
+		return true
+	}
+	if r == 0x2065 || (r >= 0xFFF0 && r <= 0xFFF8) {
+		return true
+	}
+	if r >= 0xE0000 && r <= 0xE0FFF {
 		return true
 	}
 	return false
@@ -752,9 +806,15 @@ func decodeNonMessageJSONBody(status int, contentType string, body []byte, dest 
 }
 
 func getFileBodyError(status int, contentType, body string) error {
-	// An empty 200 is not a result file: there is nothing to save.
-	if bodyLooksLikeHTML(body) || contentTypeIsHTML(contentType) || status != 200 || strings.TrimSpace(body) == "" {
-		return statusError(status, messageFromBody(status, contentType, body))
+	// An empty 200 is not a result file: there is nothing to save. TrimSpace
+	// keeps a BOM, so a body of only BOMs would otherwise be written out.
+	stripped := withoutBOM(body)
+	if bodyLooksLikeHTML(body) || contentTypeIsHTML(contentType) || status != 200 || stripped == "" {
+		text := body
+		if stripped == "" {
+			text = ""
+		}
+		return statusError(status, messageFromBody(status, contentType, text))
 	}
 	if shouldTreatGetFileBodyAsError(body, contentType) {
 		message := stripErrorPrefix(strings.TrimSpace(FormatGetFileErrorMessage(strings.TrimSpace(body))))

@@ -6,7 +6,7 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 
 - Keep API keys on a trusted server. Do not embed them in mobile apps or browser JavaScript that untrusted users can inspect.
 - Every request must go to an `https://` URL, whichever way its base URL was set (`SetURI`, the `URI`, `BULK_URI`, `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI` variables, their `ZERO_BOUNCE_*_URI` environment variables, a `Client`'s `URI` and `BulkURI`, or the Warmup client's base URL). Any other URL is refused before the request is sent; plain `http://` is allowed only to `127.0.0.1`, `localhost` and `[::1]`, for local tests. Do not pass end-user-controlled hosts into those settings.
-- API keys with surrounding whitespace, control characters, format characters (such as U+200B), or other invisible characters are rejected before a request is sent. `Client` and `WarmupClient` print their key as `***` with every `fmt` verb, and `json.Marshal`, `xml.Marshal` and `gob` do the same.
+- API keys with whitespace at either end, a Unicode space inside the key, control characters, or format characters (such as U+200B) are rejected before a request is sent. `Client` and `WarmupClient` print their key as `***` with every `fmt` verb. `json.Marshal`, `xml.Marshal` and `gob` of a `Client` do the same. `WarmupClient` has no exported fields, so those encodings do not include its key.
 - Request URLs include `api_key` as a query parameter (ZeroBounce API contract). Do not log full request URLs or enable payload debug logging in production.
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)

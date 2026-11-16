@@ -185,6 +185,17 @@ func TestRedirectIsReportedAsRefused(t *testing.T) {
 	}
 }
 
+func TestBOMOnlyDownloadIsNotSaved(t *testing.T) {
+	for _, body := range []string{"\uFEFF", "\uFEFF\uFEFF\n"} {
+		withStatusResponder(t, 200, "text/csv", body)
+		var saved bytes.Buffer
+		err := BulkValidationResult(testing_file_id, &saved)
+		if err == nil || saved.Len() != 0 {
+			t.Fatalf("body %q saved %d bytes, err %v", body, saved.Len(), err)
+		}
+	}
+}
+
 // A getfile JSON error body on an HTTP 200 (a file that is not ready, an
 // unknown file id) is an API failure, so it carries the status like any other.
 func TestGetFileJSONErrorOn200IsZBApiError(t *testing.T) {

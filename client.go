@@ -76,6 +76,9 @@ func (c Client) String() string {
 func (c Client) GoString() string { return "zerobouncego." + c.String() }
 
 // Format keeps the API key out of every fmt verb.
+// fmt does not call Format when a Client is an unexported field of the
+// caller's struct, and %+v then prints APIKey. Unexporting APIKey would
+// not hide it: fmt still prints unexported fields.
 func (c Client) Format(state fmt.State, verb rune) {
 	formatRedacted(state, verb, c.String(), c.GoString())
 }

@@ -245,6 +245,8 @@ func TestEachDecodeStepOfTheSecretCheckIsNeeded(t *testing.T) {
 		{"doubled double quote", `k"y`, `echo k""y end`},
 		{"HTML &#39;", "k'y", "echo k&#39;y end"},
 		{"HTML &quot;", `k"y`, "echo k&quot;y end"},
+		{"HTML &APOS;", "k'y", "echo k&APOS;y end"},
+		{"hex upper-case secret", "k'y", `echo K\X27Y end`},
 		{`hex \x27`, "k'y", `echo k\x27y end`},
 		{"NUL before", "k+y/z", "a\x00b echo k+y%2fz end"},
 		{"%00 before", "k+y/z", "a%00b echo k+y%2fz end"},

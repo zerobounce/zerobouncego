@@ -262,11 +262,14 @@ func LoadEnvFromFile() bool {
 		}
 		return false
 	}
+	// Initialize copies ZERO_BOUNCE_URI with no check. If that URL is
+	// rejected, put the previous one back. The parse error quotes the whole
+	// URL, and that URL can contain the API key, so the message stays fixed.
+	previousURI := URI
 	Initialize(getAPIKeyFromEnv())
 	if err := SetURI(os.Getenv("ZERO_BOUNCE_URI"), os.Getenv("ZERO_BOUNCE_BULK_URI")); err != nil {
-		// The key is set either way; say so rather than leaving the caller to
-		// wonder why its base URL override did not take.
-		fmt.Printf("The '.env' base URL was not applied (%s). Continuing with the current one\n", err.Error())
+		URI = previousURI
+		fmt.Printf("The '.env' base URL was not applied. Continuing with the current one\n")
 	}
 	return true
 }
