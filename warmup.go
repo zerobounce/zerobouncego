@@ -178,7 +178,9 @@ func (c *WarmupClient) sendBody(download bool, method, path string, params url.V
 		if apiErr, ok := err.(*ZBApiError); ok {
 			return response.StatusCode, nil, response.Header, apiErr
 		}
-		return response.StatusCode, nil, response.Header, fmt.Errorf("%s", c.redact(err.Error(), secrets...))
+		// A body that cannot be read (a timeout mid-body, a cut-short body)
+		// keeps errors.Is and net.Error, as the request error above does.
+		return response.StatusCode, nil, response.Header, redactTransportError(err, append([]string{c.key()}, secrets...)...)
 	}
 	if response.StatusCode > 299 {
 		return response.StatusCode, payload, response.Header, &ZBApiError{

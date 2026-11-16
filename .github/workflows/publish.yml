@@ -155,6 +155,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.inputs.tag }}
+          TAG_SHA: ${{ needs.validate-tag.outputs.tag_sha }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists, skipping."
@@ -162,6 +163,7 @@ jobs:
             # --verify-tag: fail if the tag is gone instead of creating one at main.
             gh release create "$TAG" \
               --verify-tag \
+              --target "$TAG_SHA" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" \
               --generate-notes

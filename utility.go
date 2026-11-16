@@ -558,7 +558,7 @@ func (t redactingTransport) RoundTrip(request *http.Request) (*http.Response, er
 }
 
 // transport error kinds a redacted error still answers errors.Is for.
-var redactedSentinels = []error{context.DeadlineExceeded, context.Canceled, os.ErrDeadlineExceeded, net.ErrClosed}
+var redactedSentinels = []error{context.DeadlineExceeded, context.Canceled, os.ErrDeadlineExceeded, net.ErrClosed, io.ErrUnexpectedEOF}
 
 // redactTransportError returns err untouched when its text holds no secret.
 // Otherwise it returns a redactedTransportError: the masked text, and none of
@@ -593,13 +593,12 @@ func redactTransportError(err error, extra ...string) error {
 	return out
 }
 
-// safeLayers lists the errors in err's chain whose text and Go-syntax print
-// hold no secret: those cannot leak, and keeping them lets errors.Is find a
-// caller's own sentinel behind a transport that quoted the request.
-// layerIsClean reports whether one error value shows no secret in %v, %+v or
-// %#v (the last one prints unexported fields, such as a dumped request).
+// layerIsClean reports whether one error value shows no secret under any
+// verb a caller (or a wrapping error such as *url.Error, which uses %s) may
+// print it with: %v, %+v, %#v (unexported fields, such as a dumped request),
+// %s and %q. A custom Format method can print differently per verb.
 func layerIsClean(e error, secrets []string) bool {
-	for _, text := range []string{fmt.Sprintf("%v", e), fmt.Sprintf("%+v", e), fmt.Sprintf("%#v", e)} {
+	for _, text := range []string{fmt.Sprintf("%v", e), fmt.Sprintf("%+v", e), fmt.Sprintf("%#v", e), fmt.Sprintf("%s", e), fmt.Sprintf("%q", e)} {
 		if maskSecrets(text, secrets...) != text || omitIfSecretSurvives(text, secrets...) != text || redactAPIKeyParams(text) != text {
 			return false
 		}
@@ -632,6 +631,9 @@ func everyLayerClean(err error, secrets []string) bool {
 	return clean
 }
 
+// safeLayers lists the errors in err's chain whose text and Go-syntax print
+// hold no secret: those cannot leak, and keeping them lets errors.Is find a
+// caller's own sentinel behind a transport that quoted the request.
 func safeLayers(err error, secrets []string) []error {
 	var safe []error
 	var walk func(e error, depth int)

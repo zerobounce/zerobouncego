@@ -62,11 +62,6 @@ func redactedKey(key string) string {
 	return "***"
 }
 
-// redactedURL prints a base URL without the password of its userinfo
-// (https://user:secret@host/ prints as https://***@host/) and without the
-// value of an api_key query parameter, in any case (?api_key=abc prints as
-// ?api_key=REDACTED). A URL that does not parse and holds an @ is not printed
-// at all.
 // redactedURLFor is redactedURL that also masks the client's own key
 // wherever it appears in the URL (path, another parameter, a fragment).
 func redactedURLFor(raw, key string) string {
@@ -76,6 +71,11 @@ func redactedURLFor(raw, key string) string {
 	return maskSecrets(redactedURL(raw), key)
 }
 
+// redactedURL prints a base URL without the password of its userinfo
+// (https://user:secret@host/ prints as https://***@host/) and without the
+// value of an api_key query parameter, in any case (?api_key=abc prints as
+// ?api_key=REDACTED). A URL that does not parse and holds an @ is not printed
+// at all.
 func redactedURL(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil {
