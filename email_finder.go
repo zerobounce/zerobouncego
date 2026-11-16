@@ -6,12 +6,12 @@ import "net/url"
 // `EmailConfidence` field possible values: low, medium, high
 // (it is inconsistent as it can be either lowercase or uppercase)
 type FindEmailResponse struct {
-	Email				string			`json:"email"`
-	EmailConfidence		string			`json:"email_confidence"`
-	Domain				string			`json:"domain"`
-	CompanyName			string			`json:"company_name"`
-	DidYouMean			string			`json:"did_you_mean"`
-	FailureReason		string			`json:"failure_reason"`
+	Email           string `json:"email"`
+	EmailConfidence string `json:"email_confidence"`
+	Domain          string `json:"domain"`
+	CompanyName     string `json:"company_name"`
+	DidYouMean      string `json:"did_you_mean"`
+	FailureReason   string `json:"failure_reason"`
 }
 
 func findEmailInternal(domain, company_name, first_name, middle_name, last_name string) (*FindEmailResponse, error) {
@@ -40,7 +40,7 @@ func findEmailInternal(domain, company_name, first_name, middle_name, last_name 
 		return response, error_
 	}
 
-	error_ = doGetNonMessageRequest(url_to_request, response)
+	error_ = DoGetRequest(url_to_request, response)
 	return response, error_
 }
 
@@ -59,7 +59,6 @@ func FindEmailByDomainFirstName(domain, first_name string) (*FindEmailResponse, 
 	return findEmailInternal(domain, "", first_name, "", "")
 }
 
-
 // FindEmailByCompanyName uses parameters to provide valid business email based on a given company name
 func FindEmailByCompanyFirstMiddleLastName(company_name, first_name, middle_name, last_name string) (*FindEmailResponse, error) {
 	return findEmailInternal("", company_name, first_name, middle_name, last_name)
@@ -74,7 +73,6 @@ func FindEmailByCompanyFirstLastName(company_name, first_name, last_name string)
 func FindEmailByCompanyFirstName(company_name, first_name string) (*FindEmailResponse, error) {
 	return findEmailInternal("", company_name, first_name, "", "")
 }
-
 
 // FindEmail uses parameters to provide valid business email
 //

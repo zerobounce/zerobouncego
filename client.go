@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/url"
+	"strings"
 )
 
 const (
@@ -57,6 +59,24 @@ func redactedKey(key string) string {
 	return "***"
 }
 
+// redactedURL prints a base URL without the password of its userinfo
+// (https://user:secret@host/ prints as https://***@host/). A URL that does not
+// parse and holds an @ is not printed at all.
+func redactedURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		if strings.Contains(raw, "@") {
+			return "(url redacted)"
+		}
+		return raw
+	}
+	if parsed.User == nil {
+		return raw
+	}
+	parsed.User = url.User("***")
+	return parsed.String()
+}
+
 // formatRedacted prints a value through its String or GoString, so no verb
 // (%v, %+v, %#v, %s, %q, %x) reaches the struct fields and the API key.
 func formatRedacted(state fmt.State, verb rune, text, goText string) {
@@ -69,7 +89,7 @@ func formatRedacted(state fmt.State, verb rune, text, goText string) {
 
 // String names the type and its fields, with the API key redacted.
 func (c Client) String() string {
-	return fmt.Sprintf("Client{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), c.URI, c.BulkURI)
+	return fmt.Sprintf("Client{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), redactedURL(c.URI), redactedURL(c.BulkURI))
 }
 
 // GoString is String in Go syntax (%#v), with the API key redacted.
@@ -85,7 +105,7 @@ func (c Client) Format(state fmt.State, verb rune) {
 
 // String names the type and its fields, with the API key redacted.
 func (c RequestConfig) String() string {
-	return fmt.Sprintf("RequestConfig{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), c.URI, c.BulkURI)
+	return fmt.Sprintf("RequestConfig{APIKey:%q, URI:%q, BulkURI:%q}", redactedKey(c.APIKey), redactedURL(c.URI), redactedURL(c.BulkURI))
 }
 
 // GoString is String in Go syntax (%#v), with the API key redacted.

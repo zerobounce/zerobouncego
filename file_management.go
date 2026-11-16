@@ -81,11 +81,23 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer, v
 	var file_form_writer io.Writer
 
 	// add the fields FIRST
-	multipart_writer.WriteField("api_key", API_KEY)
-	multipart_writer.WriteField("has_header_row", fmt.Sprintf("%v", csv_file.HasHeaderRow))
+	writeField := func(key, value string) error {
+		if err := multipart_writer.WriteField(key, value); err != nil {
+			return errors.New("error creating multipart form: " + err.Error())
+		}
+		return nil
+	}
+	if err := writeField("api_key", API_KEY); err != nil {
+		return err
+	}
+	if err := writeField("has_header_row", fmt.Sprintf("%v", csv_file.HasHeaderRow)); err != nil {
+		return err
+	}
 
 	if csv_file.ReturnURL != "" {
-		multipart_writer.WriteField("return_url", csv_file.ReturnURL)
+		if err := writeField("return_url", csv_file.ReturnURL); err != nil {
+			return err
+		}
 	}
 
 	// Name, gender, and IP columns are validation sendfile fields. Scoring sendfile
@@ -93,18 +105,24 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer, v
 	if validationSendfile {
 		columns_mapping := csv_file.ColumnsMapping()
 		for column_key, column_value := range columns_mapping {
-			multipart_writer.WriteField(column_key, fmt.Sprintf("%d", column_value))
+			if err := writeField(column_key, fmt.Sprintf("%d", column_value)); err != nil {
+				return err
+			}
 		}
 	} else {
-		multipart_writer.WriteField("email_address_column", fmt.Sprintf("%d", csv_file.EmailAddressColumn))
+		if err := writeField("email_address_column", fmt.Sprintf("%d", csv_file.EmailAddressColumn)); err != nil {
+			return err
+		}
 	}
 
 	if validationSendfile && csv_file.AllowPhase2 != nil {
-		multipart_writer.WriteField("allow_phase_2", fmt.Sprintf("%t", *csv_file.AllowPhase2))
+		if err := writeField("allow_phase_2", fmt.Sprintf("%t", *csv_file.AllowPhase2)); err != nil {
+			return err
+		}
 	}
 
 	// add the file AFTERWARDS
-	file_form_writer, error_ = multipart_writer.CreateFormFile("file", csv_file.FileName)
+	file_form_writer, error_ = multipart_writer.CreateFormFile("file", multipartFileName(csv_file.FileName))
 	if error_ != nil {
 		return errors.New("error creating multipart form: " + error_.Error())
 	}
@@ -115,7 +133,9 @@ func (csv_file *CsvFile) FillMultipartForm(multipart_writer *multipart.Writer, v
 		return errors.New("error reading from csv file: " + error_.Error())
 	}
 
-	file_form_writer.Write(contents)
+	if _, error_ = file_form_writer.Write(contents); error_ != nil {
+		return errors.New("error creating multipart form: " + error_.Error())
+	}
 	error_ = multipart_writer.Close()
 	if error_ != nil {
 		return errors.New("error populating multiform with file: " + error_.Error())
@@ -245,7 +265,9 @@ func GenericFileSubmitWithOptions(
 	// MULTI-PART FORM PREPARATION
 	multipart_writer := multipart.NewWriter(multipart_buffer)
 	if opts != nil && opts.RemoveDuplicate != nil {
-		multipart_writer.WriteField("remove_duplicate", fmt.Sprintf("%v", *opts.RemoveDuplicate))
+		if error_ = multipart_writer.WriteField("remove_duplicate", fmt.Sprintf("%v", *opts.RemoveDuplicate)); error_ != nil {
+			return nil, error_
+		}
 	}
 	validationSendfile := endpoint == ENDPOINT_FILE_SEND
 	error_ = csv_file.FillMultipartForm(multipart_writer, validationSendfile)
@@ -254,7 +276,7 @@ func GenericFileSubmitWithOptions(
 	}
 
 	// THE ACTUAL REQUEST
-	url_to_access, error_ := url.JoinPath(BULK_URI, endpoint)
+	url_to_access, error_ := joinBaseURL(BULK_URI, endpoint)
 	if error_ != nil {
 		return nil, error_
 	}
@@ -297,7 +319,7 @@ func GenericFileStatusCheck(file_id, endpoint string) (*FileStatusResponse, erro
 	params.Set("file_id", file_id)
 
 	// Do the request
-	url_to_request, error_ := url.JoinPath(BULK_URI, endpoint)
+	url_to_request, error_ := joinBaseURL(BULK_URI, endpoint)
 	if error_ != nil {
 		return nil, error_
 	}
@@ -342,7 +364,7 @@ func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *G
 		}
 	}
 
-	url_to_request, err := url.JoinPath(BULK_URI, endpoint)
+	url_to_request, err := joinBaseURL(BULK_URI, endpoint)
 	if err != nil {
 		return err
 	}
@@ -390,7 +412,7 @@ func GenericFileDelete(file_id, endpoint string) (*FileValidationResponse, error
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", file_id)
 
-	url_to_request, error_ := url.JoinPath(BULK_URI, endpoint)
+	url_to_request, error_ := joinBaseURL(BULK_URI, endpoint)
 	if error_ != nil {
 		return nil, error_
 	}

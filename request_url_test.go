@@ -267,7 +267,7 @@ func TestEveryRequestRejectsPaddedOrControlCharacterKey(t *testing.T) {
 		client, warmup := pointEverythingAt(t, "https://api.example.test")
 		Initialize(key)
 		client.APIKey = key
-		if _, err := NewWarmupClient(key, ""); err == nil || !strings.Contains(err.Error(), "surrounding whitespace or control characters") {
+		if _, err := NewWarmupClient(key, ""); err == nil || !strings.Contains(err.Error(), "whitespace, control or invisible characters") {
 			t.Fatalf("%q NewWarmupClient: err = %v", key, err)
 		}
 		swept := 0
@@ -279,7 +279,7 @@ func TestEveryRequestRejectsPaddedOrControlCharacterKey(t *testing.T) {
 			t.Run(fmt.Sprintf("%q/%s", key, call.name), func(t *testing.T) {
 				fake.clear()
 				err := call.call()
-				if err == nil || !strings.Contains(err.Error(), "surrounding whitespace or control characters") {
+				if err == nil || !strings.Contains(err.Error(), "whitespace, control or invisible characters") {
 					t.Fatalf("err = %v, want the key refusal", err)
 				}
 				if n := fake.size(); n != 0 {

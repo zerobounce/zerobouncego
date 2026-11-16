@@ -9,8 +9,9 @@ func TestGetFileJSONIndicatesError(t *testing.T) {
 	if !GetFileJSONIndicatesError("\uFEFF{\"success\":false,\"message\":\"File not found\"}") {
 		t.Fatal("BOM-prefixed error object")
 	}
-	if GetFileJSONIndicatesError(`{"file_id":"x"}`) {
-		t.Fatal("expected false")
+	// Any JSON object is an error payload, never a result file.
+	if !GetFileJSONIndicatesError(`{"file_id":"x"}`) {
+		t.Fatal("expected true")
 	}
 	if !shouldTreatGetFileBodyAsError(`{"file_id":"x"}`, "text/csv") {
 		t.Fatal("any JSON object is a download error")

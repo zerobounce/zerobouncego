@@ -35,7 +35,7 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 		query = url.Values{}
 	}
 
-	url_to_request, error_ := url.JoinPath(INBOX_PLACEMENT_URI, path)
+	url_to_request, error_ := joinBaseURL(INBOX_PLACEMENT_URI, path)
 	if error_ != nil {
 		return error_
 	}
@@ -77,8 +77,9 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 		return error_
 	}
 	// An empty 2xx (a 204 from DELETE) is a success with nothing to decode.
-	// A body of whitespace is not empty: it is not JSON either.
-	if len(payload) == 0 {
+	// On any other call an empty body is not a result: it is an error, like an
+	// HTML page. A body of whitespace is not empty: it is not JSON either.
+	if len(payload) == 0 && method == "DELETE" {
 		return nil
 	}
 	// The same checks as every other call: {"success": false} and an
@@ -88,7 +89,7 @@ func iptRequest(method, path string, query url.Values, body interface{}, out int
 	if out == nil {
 		return ensureJSONAPIBody(response_http.StatusCode, contentType, payload)
 	}
-	return decodeJSONBody(response_http.StatusCode, contentType, payload, out)
+	return decodeJSONBodyAllowMessage(response_http.StatusCode, contentType, payload, out)
 }
 
 // GetInboxPlacementProviders - seed providers available for new tests

@@ -45,7 +45,7 @@ func TestFormatCharactersInAKeyAreRefused(t *testing.T) {
 		"ab\u180Bc", "ab\u180Fc", "ab\u2065c", "ab\uFFF0c", "ab\U000E0002c", "ab\U000E01F0c",
 	} {
 		client := New(key)
-		if _, err := client.Validate("a@b.com", ""); err == nil || !strings.Contains(err.Error(), "whitespace or control") {
+		if _, err := client.Validate("a@b.com", ""); err == nil || !strings.Contains(err.Error(), "whitespace, control or invisible") {
 			t.Fatalf("%q: %v", key, err)
 		}
 		if _, err := NewWarmupClient(key, ""); err == nil {

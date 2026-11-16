@@ -173,7 +173,10 @@ func TestRedactionIsClosedUnderEncoding(t *testing.T) {
 // the error, its fields or its wrapped errors holds the key. The Warmup SMTP
 // password and username are checked the same way.
 func TestEveryRequestKeepsEveryEncodingOfTheKeyOutOfItsError(t *testing.T) {
-	secret := decodeSecret
+	// A key is printable ASCII without a space (checkKeyText), so the space of
+	// decodeSecret becomes an underscore here; the space forms are covered where
+	// decodeSecret is redacted directly.
+	secret := strings.ReplaceAll(decodeSecret, " ", "_")
 	sequences := encodingSequences(3)
 	for _, sequence := range sequences {
 		encoded, label := applyEncodings(secret, sequence)

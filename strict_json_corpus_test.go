@@ -87,11 +87,10 @@ func (f *fixedBodyTransport) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // emptyBodySuccess are the calls that take a zero-length 2xx as a success
-// with no result: every Inbox Placement call (open owner decision; the
-// standard keeps it for the delete only) and every Warmup JSON call (the
+// with no result: the Inbox Placement delete and every Warmup JSON call (the
 // documented empty success). A body of whitespace is not empty.
 func emptyBodySuccess(name string) bool {
-	return strings.Contains(name, "InboxPlacement") || strings.HasPrefix(name, "WarmupClient.")
+	return strings.Contains(name, "DeleteInboxPlacementTest") || strings.HasPrefix(name, "WarmupClient.")
 }
 
 // Every JSON call, Warmup and raw-JSON (ListFilters, DoGetRequest) included,
@@ -128,6 +127,11 @@ func TestEveryJSONCallFollowsTheStrictJSONCorpus(t *testing.T) {
 				}
 				var apiErr *ZBApiError
 				if entry.accept {
+					// An empty object carries nothing: on a typed call it is an
+					// API error with the response's status (standard.md §3).
+					if entry.body == "{}" && errors.As(err, &apiErr) && apiErr.StatusCode == fake.status {
+						return
+					}
 					if err != nil && !(errors.As(err, &apiErr) && apiErr.StatusCode == fake.status && apiErr.Message == unexpectedJSONShapeMessage) {
 						t.Fatalf("valid JSON refused: %v", err)
 					}

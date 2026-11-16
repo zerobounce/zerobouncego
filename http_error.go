@@ -86,10 +86,29 @@ func maskSecrets(text string, secrets ...string) string {
 			continue
 		}
 		for _, form := range secretForms(secret) {
-			text = strings.ReplaceAll(text, form, "***")
+			text = foldPattern(form).ReplaceAllLiteralString(text, "***")
 		}
 	}
 	return text
+}
+
+// foldPatterns caches the case-insensitive pattern for each secret form.
+var foldPatterns sync.Map
+
+// foldPattern matches form ignoring case (Unicode simple case folding), so an
+// upper-cased or lower-cased echo of a secret is found too.
+func foldPattern(form string) *regexp.Regexp {
+	if cached, ok := foldPatterns.Load(form); ok {
+		return cached.(*regexp.Regexp)
+	}
+	pattern := regexp.MustCompile("(?i)" + regexp.QuoteMeta(form))
+	foldPatterns.Store(form, pattern)
+	return pattern
+}
+
+// containsFold reports whether text holds secret, ignoring case.
+func containsFold(text, secret string) bool {
+	return strings.Contains(text, secret) || foldPattern(secret).MatchString(text)
 }
 
 // secretForms lists every form maskSecrets masks, longest first.
@@ -165,7 +184,7 @@ const credentialOmittedMessage = "ZeroBounce's response was omitted from this er
 // left. When any view of text, decoded up to maxSecretDecodeLayers layers
 // deep in any order (percent-decoding, percent-decoding with + as a space,
 // JSON-unescaping with \/ and \uXXXX, a backslash or \xHH escape, a doubled
-// quote, an HTML character reference), contains a secret, the whole text is
+// quote, an HTML character reference), compared ignoring case, contains a secret, the whole text is
 // dropped for credentialOmittedMessage.
 func omitIfSecretSurvives(text string, secrets ...string) string {
 	var present []string
@@ -418,67 +437,48 @@ func (c RequestConfig) requireKey() error {
 	if strings.TrimSpace(c.APIKey) == "" {
 		return errors.New("api_key is required: call Initialize or New with a non-empty api_key")
 	}
-	if !validKeyText(c.APIKey) {
-		return errors.New(invalidKeyTextMessage)
+	if err := checkKeyText(c.APIKey); err != nil {
+		return err
 	}
 	rememberKey(c.APIKey)
 	return nil
 }
 
-// invalidKeyTextMessage is the error for a key validKeyText refuses.
-const invalidKeyTextMessage = "invalid parameter: api_key has surrounding whitespace or control characters, whitespace inside the key, a format character, or an invisible character"
+const (
+	apiKeyCharactersProblem = "invalid parameter: api_key has whitespace, control or invisible characters"
+	apiKeyHeaderProblem     = "invalid parameter: api_key has characters that cannot be sent in an HTTP header"
+)
 
-// validKeyText reports whether a key has no whitespace and no control, format
-// or invisible characters. Such a key would be quoted, unredacted, in the
-// HTTP library's own error, or would be sent while looking like a different key.
-func validKeyText(key string) bool {
-	if key != strings.TrimSpace(key) {
-		return false
-	}
-	return !strings.ContainsFunc(key, invalidKeyRune)
-}
-
-// invalidKeyRune reports a rune that must not appear in an API key.
-// Controls include the C1 range (U+0080–U+009F). Format characters (U+200B,
-// U+FEFF, U+180E and the rest of Cf) are not Unicode spaces, so TrimSpace
-// keeps them. The other runes are invisible but not in Cf: the default
-// ignorables, variation selectors, and the braille blank.
-func invalidKeyRune(r rune) bool {
-	// TrimSpace only sees the ends, so a Unicode space in the middle
-	// (U+00A0, U+2028, U+3000 and the rest) would be sent. An ordinary
-	// space is visible, so it is not treated as one of those.
-	if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (unicode.IsSpace(r) && r != ' ') {
-		return true
-	}
+// invisibleRune reports the invisible runes that are not whitespace, control
+// or format (Cf) characters: the default ignorables, variation selectors,
+// Hangul and braille blanks, and the Mongolian free variation selectors and
+// vowel separator.
+func invisibleRune(r rune) bool {
 	switch r {
-	case 0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x2800, 0x3164, 0xFFA0:
+	case 0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x2065, 0x2800, 0x3164, 0xFFA0:
 		return true
 	}
-	if r >= 0xFE00 && r <= 0xFE0F {
-		return true
-	}
-	// Mongolian free variation selectors are marks, not format characters.
-	// The rest are default-ignorable and unassigned, so Cf does not match.
-	if r >= 0x180B && r <= 0x180F {
-		return true
-	}
-	if r == 0x2065 || (r >= 0xFFF0 && r <= 0xFFF8) {
-		return true
-	}
-	if r >= 0xE0000 && r <= 0xE0FFF {
-		return true
-	}
-	return false
+	return (r >= 0x180B && r <= 0x180F) || (r >= 0xFE00 && r <= 0xFE0F) ||
+		(r >= 0xFFF0 && r <= 0xFFF8) || (r >= 0xE0000 && r <= 0xE0FFF)
 }
 
-// containsFold reports whether text holds secret in any case. Comparing the
-// lowered copies avoids taking indexes from a string whose case-fold changed
-// length (U+0130).
-func containsFold(text, secret string) bool {
-	if secret == "" {
-		return false
+// checkKeyText refuses a key that cannot be sent as an HTTP header value:
+// whitespace of any kind (NBSP, U+0085, U+2028, U+3000, a space inside),
+// control and Unicode format characters (U+200B, U+FEFF, U+180E, U+2060)
+// anywhere in it, then anything outside printable ASCII. The HTTP library's
+// own error for such a key would quote it unredacted.
+func checkKeyText(key string) error {
+	for _, r := range key {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zs, unicode.Zl, unicode.Zp) || invisibleRune(r) {
+			return errors.New(apiKeyCharactersProblem)
+		}
 	}
-	return strings.Contains(strings.ToLower(text), strings.ToLower(secret))
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x21 || key[i] > 0x7e {
+			return errors.New(apiKeyHeaderProblem)
+		}
+	}
+	return nil
 }
 
 // readLimitedBody reads a JSON response body of at most maxJSONBodyBytes. A
@@ -526,18 +526,41 @@ func stripErrorPrefix(message string) string {
 	}
 }
 
+// indexFoldASCII is strings.Index of an ASCII-lower-case needle in s, ignoring
+// ASCII case, on the bytes of s as they are. (strings.ToLower can change a
+// string's byte length, e.g. "İ", so an index into a lower-cased copy is not an
+// index into the original.)
+func indexFoldASCII(s, needle string) int {
+	for i := 0; i+len(needle) <= len(s); i++ {
+		match := true
+		for j := 0; j < len(needle); j++ {
+			c := s[i+j]
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != needle[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
 func htmlTitle(body string) string {
-	lower := strings.ToLower(body)
-	start := strings.Index(lower, "<title")
+	start := indexFoldASCII(body, "<title")
 	if start < 0 {
 		return ""
 	}
-	openEnd := strings.Index(lower[start:], ">")
+	openEnd := strings.Index(body[start:], ">")
 	if openEnd < 0 {
 		return ""
 	}
 	openEnd += start
-	closeRel := strings.Index(lower[openEnd:], "</title>")
+	closeRel := indexFoldASCII(body[openEnd:], "</title>")
 	if closeRel < 0 {
 		return ""
 	}
@@ -571,14 +594,15 @@ func errorOnlyMessage(object map[string]interface{}) string {
 // messageOnlyBody reports whether a JSON body is nothing but a message: an
 // object with no "success" field whose keys are all message keys. The keys
 // decide, whatever the message's value (a string, blank, null or a list), since
-// no result object has these keys. Only for calls whose result is never a bare
+// no result object has these keys. An empty object {} is one too: it carries
+// nothing. Only for calls whose result is never a bare
 // message. LIVE: guessformat answers an invalid or drained key with an HTTP
 // 200 and {"Message": "Invalid API key or your account ran out of credits"}.
 // validate is not one of them: a repeated greylist validate answers with a
 // bare Message, and that is a result.
 func messageOnlyBody(body []byte) bool {
 	var object map[string]interface{}
-	if json.Unmarshal(body, &object) != nil || len(object) == 0 {
+	if json.Unmarshal(body, &object) != nil || object == nil {
 		return false
 	}
 	if _, found := object["success"]; found {
@@ -611,10 +635,15 @@ func apiErrorField(object map[string]interface{}, keys []string) string {
 				return strings.TrimSpace(typed)
 			}
 		case []interface{}:
-			if len(typed) > 0 {
-				if text, ok := typed[0].(string); ok && strings.TrimSpace(text) != "" {
-					return strings.TrimSpace(text)
+			// The non-blank strings of the list, one per line.
+			var lines []string
+			for _, item := range typed {
+				if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+					lines = append(lines, strings.TrimSpace(text))
 				}
+			}
+			if len(lines) > 0 {
+				return strings.Join(lines, "\n")
 			}
 		}
 	}
@@ -701,31 +730,21 @@ func ensureJSONAPIBody(status int, contentType string, body []byte) error {
 	return nil
 }
 
-// isFalsyAPISuccess reports whether a "success" field means failure. The API
-// sends it as a JSON false, "false" or "False" depending on the endpoint.
+// isFalsyAPISuccess reports whether a "success" field means failure: every
+// value a strict boolean reads as false (Python and PHP read the same list). The
+// API sends it as a JSON false, "false" or "False" depending on the endpoint;
+// 0 and "0" are failures too, whitespace around a string ignored.
 func isFalsyAPISuccess(value interface{}) bool {
 	switch typed := value.(type) {
 	case bool:
 		return !typed
+	case float64:
+		return typed == 0
 	case string:
-		return strings.EqualFold(typed, "false")
+		text := strings.ToLower(strings.TrimSpace(typed))
+		return text == "false" || text == "0"
 	}
 	return false
-}
-
-// allowsMessageOnly is the set of results a bare message is a success for:
-// validate's greylist answer, the raw-JSON filter calls, every Inbox
-// Placement call, and the list-evaluator result. Those decode into
-// *ValidateResponse or *map[string]interface{}. ListFilters returns raw JSON
-// and never reaches here. Every other typed call rejects a message-only body
-// and an empty object.
-func allowsMessageOnly(dest interface{}) bool {
-	switch dest.(type) {
-	case *ValidateResponse, *map[string]interface{}:
-		return true
-	default:
-		return false
-	}
 }
 
 func emptyJSONObject(body []byte) bool {
@@ -742,17 +761,56 @@ func emptyJSONObject(body []byte) bool {
 	return len(object) == 0
 }
 
+// decodeJSONBody decodes a typed call's result. A body that is nothing but a
+// message, or is an empty object, is an error with the response's status
+// (standard.md §3): no typed result looks like that.
 func decodeJSONBody(status int, contentType string, body []byte, dest interface{}) error {
 	if err := ensureJSONAPIBody(status, contentType, body); err != nil {
 		return err
 	}
-	if !allowsMessageOnly(dest) && emptyJSONObject(body) {
+	if emptyJSONObject(body) {
 		// Valid JSON of the wrong shape. The corpus accepts only this message
 		// for an object that parses and is not the call's result.
 		return statusError(status, unexpectedJSONShapeMessage)
 	}
-	if !allowsMessageOnly(dest) && messageOnlyBody(body) {
+	if messageOnlyBody(body) {
 		return apiError(status, messageFromBody(status, contentType, string(body)))
+	}
+	return decodeJSONBodyAllowMessage(status, contentType, body, dest)
+}
+
+// decodeValidateJSONBody is decodeJSONBody for validate: a repeated greylist
+// validate answers a bare {"Message": "<text>"}, which is a result. Only that
+// key, capitalised and with text; any other message-only body is an error.
+func decodeValidateJSONBody(status int, contentType string, body []byte, dest interface{}) error {
+	if err := ensureJSONAPIBody(status, contentType, body); err != nil {
+		return err
+	}
+	if emptyJSONObject(body) {
+		return statusError(status, unexpectedJSONShapeMessage)
+	}
+	if messageOnlyBody(body) && !greylistBody(body) {
+		return apiError(status, messageFromBody(status, contentType, string(body)))
+	}
+	return decodeJSONBodyAllowMessage(status, contentType, body, dest)
+}
+
+// greylistBody reports whether a body is exactly {"Message": "<non-blank text>"}.
+func greylistBody(body []byte) bool {
+	var object map[string]interface{}
+	if json.Unmarshal(body, &object) != nil || len(object) != 1 {
+		return false
+	}
+	text, ok := object["Message"].(string)
+	return ok && strings.TrimSpace(text) != ""
+}
+
+// decodeJSONBodyAllowMessage is decodeJSONBody without the message-only check,
+// for the calls whose result may be a bare message or a free-form object (raw
+// JSON filters, the list evaluator result, Inbox Placement).
+func decodeJSONBodyAllowMessage(status int, contentType string, body []byte, dest interface{}) error {
+	if err := ensureJSONAPIBody(status, contentType, body); err != nil {
+		return err
 	}
 	// The body is valid JSON (ensureJSONAPIBody), so this fails only when it
 	// is not the shape the call returns, e.g. a bare string or number.
@@ -793,22 +851,10 @@ func (f validateRequiredFields) complete() bool {
 	return (f.Address != nil && f.Status != nil) || f.Message != nil
 }
 
-// decodeNonMessageJSONBody is decodeJSONBody for a call whose result is
-// never a bare message, so a message-only body is a failure.
-func decodeNonMessageJSONBody(status int, contentType string, body []byte, dest interface{}) error {
-	if err := ensureJSONAPIBody(status, contentType, body); err != nil {
-		return err
-	}
-	if messageOnlyBody(body) {
-		return apiError(status, messageFromBody(status, contentType, string(body)))
-	}
-	return decodeJSONBody(status, contentType, body, dest)
-}
-
 func getFileBodyError(status int, contentType, body string) error {
 	// An empty 200 is not a result file: there is nothing to save. TrimSpace
 	// keeps a BOM, so a body of only BOMs would otherwise be written out.
-	stripped := withoutBOM(body)
+	stripped := trimBOMSpace(body)
 	if bodyLooksLikeHTML(body) || contentTypeIsHTML(contentType) || status != 200 || stripped == "" {
 		text := body
 		if stripped == "" {
@@ -817,8 +863,8 @@ func getFileBodyError(status int, contentType, body string) error {
 		return statusError(status, messageFromBody(status, contentType, text))
 	}
 	if shouldTreatGetFileBodyAsError(body, contentType) {
-		message := stripErrorPrefix(strings.TrimSpace(FormatGetFileErrorMessage(strings.TrimSpace(body))))
-		if message == "" || len(message) > 500 || bodyLooksLikeHTML(message) {
+		message := stripErrorPrefix(strings.TrimSpace(FormatGetFileErrorMessage(trimBOMSpace(body))))
+		if message == "" || len(message) > 500 || bodyLooksLikeHTML(message) || message == trimBOMSpace(body) {
 			message = messageFromBody(status, contentType, body)
 		}
 		// A JSON error body, or a JSON content type on a download, is the API

@@ -50,3 +50,19 @@ jobs:
 
       - name: Run tests
         run: go test ./... -cover -short -v
+
+  # Builds the Dockerfile and runs the documented test run in it, so a broken image
+  # (the non-root user's build cache, a bad pin) fails here and not in a contributor's hands.
+  docker:
+    name: Docker test image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build -t zerobouncego-test .
+
+      - name: Run the tests in the image
+        run: docker run --rm --network=none zerobouncego-test

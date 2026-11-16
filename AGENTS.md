@@ -28,7 +28,7 @@ go test -short -count=1 .
 go test -short -race .
 ```
 
-CI (`.github/workflows/sdk_ci.yml`) runs `go vet ./...` and `go test ./... -cover -short -v` on the `go.mod` floor and on Go 1.27. `-short` skips tests that call the live API; a plain `go test ./...` skips them too unless `ZEROBOUNCE_INTEGRATION=1` is set.
+CI (`.github/workflows/sdk_ci.yml`) runs `go vet ./...` and `go test ./... -cover -short -v` on two lanes: the Go version `go.mod` declares (1.21, read from its `go` line) and Go 1.27, both with `GOTOOLCHAIN=local`. A third job builds the `Dockerfile` and runs the tests in the image. The publish workflow runs the same two lanes before it releases. `-short` skips tests that call the live API; a plain `go test ./...` skips them too unless `ZEROBOUNCE_INTEGRATION=1` is set. `go vet` is the only lint step.
 
 ## Conventions
 

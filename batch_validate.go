@@ -3,14 +3,13 @@ package zerobouncego
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 )
 
 // EmailToValidate represents one unit send to the batch validate endpoint
 type EmailToValidate struct {
 	EmailAddress string `json:"email_address"`
-	IPAddress    string `json:"ip_address"`
+	IPAddress    string `json:"ip_address,omitempty"`
 }
 
 // EmailBatchError an error unit received in the response, that can be associated
@@ -101,7 +100,7 @@ func validateBatchWithOptions(cfg RequestConfig, emails_list []EmailToValidate, 
 	}
 	request_payload := strings.NewReader(request_payload_builder.String())
 
-	urlToAccess, error_ := url.JoinPath(cfg.URI, ENDPOINT_BATCH_VALIDATE)
+	urlToAccess, error_ := joinBaseURL(cfg.URI, ENDPOINT_BATCH_VALIDATE)
 	if error_ != nil {
 		return *response_object, fmt.Errorf("invalid URL (%s) or endpoint (%s) value", cfg.URI, ENDPOINT_BATCH_VALIDATE)
 	}

@@ -55,7 +55,7 @@ func postBulkRootMultipart(requestURL string, file io.Reader, fileName string, f
 		return nil, err
 	}
 
-	fileWriter, err := writer.CreateFormFile("file", fileName)
+	fileWriter, err := writer.CreateFormFile("file", multipartFileName(fileName))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func postBulkRootForm(path string, fields url.Values) (*FileValidationResponse, 
 	}
 	fields.Set("api_key", API_KEY)
 
-	requestURL, err := url.JoinPath(bulkAPIRoot(), strings.TrimPrefix(path, "/"))
+	requestURL, err := joinBaseURL(bulkAPIRoot(), strings.TrimPrefix(path, "/"))
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func bulkRootFileStatus(baseURL, fileID string) (*FileStatusResponse, error) {
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", fileID)
 
-	requestURL, err := url.JoinPath(baseURL, "filestatus")
+	requestURL, err := joinBaseURL(baseURL, "filestatus")
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func bulkRootResultFetch(baseURL, fileID string, fileWriter io.Writer) error {
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", fileID)
 
-	requestURL, err := url.JoinPath(baseURL, "getfile")
+	requestURL, err := joinBaseURL(baseURL, "getfile")
 	if err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func bulkRootFileDelete(baseURL, fileID string) (*FileValidationResponse, error)
 	params.Set("api_key", API_KEY)
 	params.Set("file_id", fileID)
 
-	requestURL, err := url.JoinPath(baseURL, "deletefile")
+	requestURL, err := joinBaseURL(baseURL, "deletefile")
 	if err != nil {
 		return nil, err
 	}
@@ -256,4 +256,11 @@ func optionalIntField(column int) (string, bool) {
 		return "", false
 	}
 	return fmt.Sprintf("%d", column), true
+}
+
+// multipartFileName makes a file name safe for the Content-Disposition header
+// of a multipart part: CR and LF are removed (they would end the header and
+// start a new one); CreateFormFile escapes backslash and double quote.
+func multipartFileName(name string) string {
+	return strings.NewReplacer("\r", "", "\n", "").Replace(name)
 }

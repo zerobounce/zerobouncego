@@ -10,7 +10,6 @@ package zerobouncego
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,20 +51,18 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 	if strings.TrimSpace(apiKey) == "" {
 		return nil, fmt.Errorf("empty parameter: api_key")
 	}
-	// A key with surrounding whitespace or control characters would be quoted,
+	// A key with whitespace, control or invisible characters would be quoted,
 	// unredacted, in the HTTP library's own error.
-	if !validKeyText(apiKey) {
-		return nil, errors.New(invalidKeyTextMessage)
+	if err := checkKeyText(apiKey); err != nil {
+		return nil, err
 	}
 	base := baseURL
 	if strings.TrimSpace(base) == "" {
 		base = WarmupDefaultBaseURL
 	}
-	parsed, err := url.Parse(base)
-	if err != nil || parsed.Host == "" {
-		return nil, fmt.Errorf("invalid parameter: base_url must be an https:// URL")
-	}
-	if err := checkRequestURL(parsed); err != nil {
+	// https, or http to a loopback host (local tests), as the main client
+	// allows at send time.
+	if err := checkBaseURLText(base); err != nil {
 		return nil, fmt.Errorf("invalid parameter: base_url: %w", err)
 	}
 	return &WarmupClient{
@@ -77,7 +74,7 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 
 // String names the type and its base URL, with the API key redacted.
 func (c WarmupClient) String() string {
-	return fmt.Sprintf("WarmupClient{apiKey:%q, root:%q}", redactedKey(c.apiKey), c.root)
+	return fmt.Sprintf("WarmupClient{apiKey:%q, root:%q}", redactedKey(c.apiKey), redactedURL(c.root))
 }
 
 // GoString is String in Go syntax (%#v), with the API key redacted.
@@ -97,6 +94,15 @@ func (c *WarmupClient) redact(text string, secrets ...string) string {
 
 // send performs one Warmup request and returns the status and body.
 func (c *WarmupClient) send(method, path string, params url.Values, body interface{}, secrets ...string) (int, []byte, http.Header, error) {
+	// Every send checks the base again: root is not reachable from outside the
+	// package, but the check is cheap and the send is the authority.
+	if err := requireHTTPSBase(c.root); err != nil {
+		if strings.HasPrefix(strings.ToLower(c.root), "http://") && checkBaseURLText(c.root) == nil {
+			// A plain-http loopback base (tests): the transport decides.
+		} else {
+			return 0, nil, nil, err
+		}
+	}
 	requestURL := c.root + path
 	if params != nil && len(params) > 0 {
 		requestURL = fmt.Sprintf("%s?%s", requestURL, params.Encode())
@@ -189,7 +195,7 @@ func (c *WarmupClient) csv(path string, params url.Values) (string, error) {
 	contentType := strings.ToLower(header.Get("Content-Type"))
 	// Not a CSV: an empty body, JSON (by content type, including +json, or an
 	// object or list whatever the content type, BOM stripped) or an HTML page.
-	trimmed := []byte(withoutBOM(string(payload)))
+	trimmed := []byte(trimBOMSpace(string(payload)))
 	// A body that starts with `{` or `[` is JSON, valid or not. A result CSV
 	// does not. One BOM strip is not enough: a second BOM would hide the `{`.
 	jsonBody := len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
@@ -737,7 +743,7 @@ func (c *WarmupClient) TestSMTPConfiguration(fromAddress, username, password, se
 
 // warmupMessageFromBody turns a Warmup error body into a short message.
 func warmupMessageFromBody(body []byte, status int) string {
-	trimmed := withoutBOM(string(body))
+	trimmed := trimBOMSpace(string(body))
 	if trimmed == "" {
 		return fmt.Sprintf("Empty response from ZeroBounce (HTTP %d)", status)
 	}

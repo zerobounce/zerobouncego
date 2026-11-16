@@ -286,7 +286,7 @@ func validateWithOptions(cfg RequestConfig, email string, opts ValidateOptions) 
 				form.Set(key, values[0])
 			}
 		}
-		err := doPostFormRequest(cfg, ENDPOINT_VALIDATE, form, response)
+		err := doPostFormRequestWith(cfg, ENDPOINT_VALIDATE, form, response, decodeValidateJSONBody)
 		return response, err
 	}
 
@@ -294,7 +294,7 @@ func validateWithOptions(cfg RequestConfig, email string, opts ValidateOptions) 
 	if err != nil {
 		return response, err
 	}
-	err = DoGetRequest(urlToRequest, response)
+	err = doGetValidateRequest(urlToRequest, response)
 	return response, err
 }
 

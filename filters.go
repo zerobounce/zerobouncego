@@ -65,7 +65,7 @@ func postFilterForm(endpoint string, form url.Values) (map[string]interface{}, e
 		return nil, err
 	}
 	result := map[string]interface{}{}
-	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, &result); err != nil {
+	if err = decodeJSONBodyAllowMessage(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -80,7 +80,7 @@ func postFilterRequest(endpoint string, form url.Values) (*http.Response, error)
 	}
 	form.Set("api_key", API_KEY)
 
-	urlToAccess, err := url.JoinPath(URI, strings.TrimPrefix(endpoint, "/"))
+	urlToAccess, err := joinBaseURL(URI, strings.TrimPrefix(endpoint, "/"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL (%s) or endpoint (%s) value", URI, endpoint)
 	}

@@ -4,21 +4,21 @@ import "net/url"
 
 // DomainFormats part of the `DomainSearchResponse` describing other domain formats
 type DomainFormats struct {
-	Format		string	`json:"format"`
-	Confidence	string	`json:"confidence"`
+	Format     string `json:"format"`
+	Confidence string `json:"confidence"`
 }
 
 // DomainSearchResponse response structure for DomainSearch API
 // `Confidence` field possible values: low, medium, high, unknown, undetermined
 // (it is inconsistent as it can be either lowercase or uppercase)
 type DomainSearchResponse struct {
-	Domain				string			`json:"domain"`
-	CompanyName			string			`json:"company_name"`
-	Format				string			`json:"format"`
-	Confidence			string			`json:"confidence"`
-	DidYouMean			string			`json:"did_you_mean"`
-	FailureReason		string			`json:"failure_reason"`
-	OtherDomainFormats	[]DomainFormats	`json:"other_domain_formats"`
+	Domain             string          `json:"domain"`
+	CompanyName        string          `json:"company_name"`
+	Format             string          `json:"format"`
+	Confidence         string          `json:"confidence"`
+	DidYouMean         string          `json:"did_you_mean"`
+	FailureReason      string          `json:"failure_reason"`
+	OtherDomainFormats []DomainFormats `json:"other_domain_formats"`
 }
 
 func domainSearchInternal(domain, company_name string) (*DomainSearchResponse, error) {
@@ -38,7 +38,7 @@ func domainSearchInternal(domain, company_name string) (*DomainSearchResponse, e
 		return response, error_
 	}
 
-	error_ = doGetNonMessageRequest(url_to_request, response)
+	error_ = DoGetRequest(url_to_request, response)
 	return response, error_
 }
 

@@ -1,29 +1,50 @@
 package zerobouncego
 
 import (
+	"bytes"
 	"encoding/json"
+	"mime"
 	"strings"
 )
 
-// GetFileJSONIndicatesError reports whether a getfile response body looks like a JSON error payload (including HTTP 200).
-// withoutBOM drops a leading UTF-8 BOM. TrimSpace leaves U+FEFF in place,
-// so a JSON error that starts with one would otherwise be saved as a file.
-func withoutBOM(body string) string {
+// utf8BOM is the byte order mark some servers and spreadsheet tools put in
+// front of a body.
+const utf8BOM = "\xef\xbb\xbf"
+
+// trimBOMSpace drops leading BOMs and surrounding white space.
+func trimBOMSpace(body string) string {
 	s := strings.TrimSpace(body)
-	for strings.HasPrefix(s, "\uFEFF") {
-		s = strings.TrimSpace(strings.TrimPrefix(s, "\uFEFF"))
+	for strings.HasPrefix(s, utf8BOM) {
+		s = strings.TrimSpace(strings.TrimPrefix(s, utf8BOM))
 	}
 	return s
 }
 
+// bodyIsJSONObjectOrList reports whether the body, after a BOM and white
+// space, is a JSON object or list: never a result file.
+func bodyIsJSONObjectOrList(body string) bool {
+	s := trimBOMSpace(body)
+	if len(s) == 0 || (s[0] != '{' && s[0] != '[') {
+		return false
+	}
+	return json.Valid([]byte(s))
+}
+
+// bodyIsJSONObjectOrListBytes is bodyIsJSONObjectOrList for a byte body.
+func bodyIsJSONObjectOrListBytes(body []byte) bool {
+	return bodyIsJSONObjectOrList(string(bytes.TrimSpace(body)))
+}
+
+// GetFileJSONIndicatesError reports whether a getfile response body looks like a JSON error payload (including HTTP 200).
 func GetFileJSONIndicatesError(body string) bool {
-	s := withoutBOM(body)
-	if len(s) == 0 || s[0] != '{' {
+	s := trimBOMSpace(body)
+	if len(s) == 0 || (s[0] != '{' && s[0] != '[') {
 		return false
 	}
 	var o map[string]interface{}
 	if err := json.Unmarshal([]byte(s), &o); err != nil {
-		return false
+		// Not an object: a list is still JSON, not a result file.
+		return s[0] == '[' && json.Valid([]byte(s))
 	}
 	if sv, ok := o["success"]; ok {
 		if b, ok := sv.(bool); ok && !b {
@@ -49,13 +70,13 @@ func GetFileJSONIndicatesError(body string) bool {
 			}
 		}
 	}
-	_, has := o["success"]
-	return has
+	// Any other JSON object is not a result file either.
+	return true
 }
 
 // FormatGetFileErrorMessage returns a short message from a getfile JSON error body.
 func FormatGetFileErrorMessage(body string) string {
-	s := withoutBOM(body)
+	s := trimBOMSpace(body)
 	var o map[string]interface{}
 	if err := json.Unmarshal([]byte(s), &o); err != nil {
 		if s == "" {
@@ -78,10 +99,15 @@ func FormatGetFileErrorMessage(body string) string {
 	return s
 }
 
+// contentTypeIncludesApplicationJSON matches application/json and every
+// structured-syntax JSON type (application/problem+json, text/x+json, ...).
 func contentTypeIncludesApplicationJSON(ct string) bool {
-	ct = strings.ToLower(ct)
-	// +json covers application/problem+json and application/vnd.api+json.
-	return strings.Contains(ct, "application/json") || strings.Contains(ct, "+json")
+	lower := strings.ToLower(ct)
+	media, _, err := mime.ParseMediaType(lower)
+	if err != nil {
+		media = strings.TrimSpace(strings.SplitN(lower, ";", 2)[0])
+	}
+	return media == "application/json" || (strings.Contains(media, "/") && strings.HasSuffix(media, "+json"))
 }
 
 func shouldTreatGetFileBodyAsError(body, contentType string) bool {
@@ -92,6 +118,6 @@ func shouldTreatGetFileBodyAsError(body, contentType string) bool {
 	// is not shaped like an error, one that follows one or more BOMs, and one
 	// that is not valid JSON (`{"error":"x"} trailing`). A result file does
 	// not start with `{` or `[`.
-	s := withoutBOM(body)
+	s := trimBOMSpace(body)
 	return len(s) > 0 && (s[0] == '{' || s[0] == '[')
 }

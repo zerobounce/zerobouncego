@@ -91,7 +91,7 @@ func TestKeyWithWhitespaceOrControlCharactersIsRejected(t *testing.T) {
 		}
 		for name, call := range checks {
 			err := call()
-			if err == nil || !strings.Contains(err.Error(), "surrounding whitespace or control characters") {
+			if err == nil || !strings.Contains(err.Error(), "whitespace, control or invisible characters") {
 				t.Fatalf("%q %s: err = %v", key, name, err)
 			}
 		}

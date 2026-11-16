@@ -3,11 +3,16 @@ package zerobouncego
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/joho/godotenv"
 )
@@ -169,42 +174,159 @@ func SetApiKey(new_api_key_value string) {
 // loopback host, for tests).
 var errPlainHTTP = errors.New("refusing to send the API key to a URL that is not https:// (http:// is allowed only for 127.0.0.1, localhost and [::1])")
 
+// errBadURL refuses a request URL that names the wrong host, no host, or a
+// host that cannot be reached, so the key would go elsewhere or nowhere.
+var errBadURL = errors.New("refusing to send the API key to a URL that is not a valid https:// URL (a host, no userinfo, no whitespace or control characters, a valid port)")
+
+var hostLabels = regexp.MustCompile(`^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.?$`)
+
+// unsafeURLRune reports whitespace, control, format characters and backslash.
+func unsafeURLRune(r rune) bool {
+	return r == '\\' || unicode.IsSpace(r) || unicode.IsControl(r) ||
+		unicode.In(r, unicode.Cf, unicode.Zs, unicode.Zl, unicode.Zp) || r == 0x180e
+}
+
+// validURLHost reports whether host (with its optional port) is a DNS name or
+// an IP address, with a valid port.
+func validURLHost(parsed *url.URL) bool {
+	host := parsed.Host
+	if host == "" || strings.HasSuffix(host, ":") || strings.ContainsFunc(host, unsafeURLRune) || strings.Contains(host, "@") {
+		return false
+	}
+	if port := parsed.Port(); port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return false
+		}
+		for _, c := range port {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	name := parsed.Hostname()
+	if name == "" {
+		return false
+	}
+	if strings.HasPrefix(host, "[") {
+		return strings.Contains(name, ":") && !strings.Contains(name, "%") && net.ParseIP(name) != nil
+	}
+	return len(name) <= 253 && hostLabels.MatchString(name)
+}
+
 // checkRequestURL accepts https:// and, for tests, http:// to 127.0.0.1,
-// localhost or [::1].
+// localhost or [::1], when the URL also has a valid host, a valid port and no
+// userinfo (https://api.zerobounce.net@evil.example sends the key to
+// evil.example).
 func checkRequestURL(parsed *url.URL) error {
 	if parsed == nil {
 		return errPlainHTTP
 	}
-	// https://api.zerobounce.net@evil.example/v2 parses as https to
-	// evil.example with userinfo api.zerobounce.net. A prefix check accepts
-	// it and the key is sent to the host after the @.
-	if parsed.User != nil {
-		return errors.New("refusing to send the API key to a URL with userinfo")
-	}
-	if strings.EqualFold(parsed.Scheme, "https") {
-		return nil
-	}
-	if strings.EqualFold(parsed.Scheme, "http") {
+	secure := strings.EqualFold(parsed.Scheme, "https")
+	if !secure {
+		if !strings.EqualFold(parsed.Scheme, "http") {
+			return errPlainHTTP
+		}
 		switch strings.ToLower(parsed.Hostname()) {
 		case "127.0.0.1", "localhost", "::1":
-			return nil
+		default:
+			return errPlainHTTP
 		}
 	}
-	return errPlainHTTP
+	if parsed.User != nil || parsed.Opaque != "" || !validURLHost(parsed) {
+		return errBadURL
+	}
+	return nil
+}
+
+// checkBaseURLText parses a configured base URL and applies checkRequestURL
+// to it, after refusing whitespace, control characters and backslashes in the
+// text itself (net/url would escape or ignore some of them).
+func checkBaseURLText(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return errBadURL
+	}
+	if err := checkRequestURL(parsed); err != nil {
+		return err
+	}
+	if strings.ContainsFunc(raw, unsafeURLRune) {
+		return errBadURL
+	}
+	return nil
+}
+
+// requireHTTPSBase is checkBaseURLText for a base that must be https://
+// (no loopback http exception), as the Warmup client's.
+func requireHTTPSBase(raw string) error {
+	if !strings.HasPrefix(strings.ToLower(raw), "https://") {
+		return errPlainHTTP
+	}
+	return checkBaseURLText(raw)
+}
+
+// joinBaseURL is url.JoinPath for a base URL that is checked first: a base of
+// "https://" would otherwise join into "https://getcredits", a different host.
+// A base that fails the check yields a URL the transport refuses (the joined
+// one when its scheme is refused, else one without a host), so
+// the caller's error handling is unchanged and nothing is sent.
+func joinBaseURL(base string, elem ...string) (string, error) {
+	joined, err := url.JoinPath(base, elem...)
+	if checkBaseURLText(base) == nil {
+		return joined, err
+	}
+	if err == nil {
+		if parsed, perr := url.Parse(joined); perr == nil && checkRequestURL(parsed) == errPlainHTTP {
+			return joined, nil
+		}
+	}
+	return "https:///", nil
 }
 
 func requireHTTPS(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-	if err := checkRequestURL(parsed); err != nil {
+	if err := checkBaseURLText(raw); err != nil {
 		return "", err
 	}
 	return raw, nil
+}
+
+// errHTTP2Debug is the error while GODEBUG turns on net/http's HTTP/2
+// frame logging, which writes the :path (with api_key) and the API-Key header.
+var errHTTP2Debug = errors.New("HTTP/2 debug logging (GODEBUG http2debug) is on and would write your API key to the log; remove http2debug from GODEBUG")
+
+// http2DebugEnabledAtInit is GODEBUG as this process started. net/http reads
+// that once, so clearing GODEBUG later does not stop the frame log.
+var http2DebugEnabledAtInit = godebugEnablesHTTP2FrameLog(os.Getenv("GODEBUG"))
+
+// http2DebugLogsRequests reports whether GODEBUG, as the process started or
+// as it is now, turns on the net/http HTTP/2 frame log. That log writes the
+// :path, and the API key is in it.
+func http2DebugLogsRequests() bool {
+	return http2DebugEnabledAtInit || godebugEnablesHTTP2FrameLog(os.Getenv("GODEBUG"))
+}
+
+// godebugEnablesHTTP2FrameLog reports whether a GODEBUG value turns on
+// net/http's HTTP/2 frame log. net/http matches the substrings http2debug=1
+// and http2debug=2 anywhere in the value, so a later http2debug=0 does not
+// turn them off. Any other non-zero http2debug setting is refused too.
+func godebugEnablesHTTP2FrameLog(value string) bool {
+	if strings.Contains(value, "http2debug=1") || strings.Contains(value, "http2debug=2") {
+		return true
+	}
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if !strings.HasPrefix(part, "http2debug=") {
+			continue
+		}
+		setting := strings.TrimSpace(strings.TrimPrefix(part, "http2debug="))
+		if setting != "" && setting != "0" {
+			return true
+		}
+	}
+	return false
 }
 
 // SetURI updates URI, BULK_URI or both. An empty string keeps the current
@@ -287,7 +409,7 @@ func prepareURL(cfg RequestConfig, endpoint string, params url.Values) (string, 
 
 	params.Set("api_key", cfg.APIKey)
 
-	finalURL, err := url.JoinPath(cfg.URI, endpoint)
+	finalURL, err := joinBaseURL(cfg.URI, endpoint)
 	if err != nil {
 		return "", err
 	}
@@ -329,13 +451,11 @@ type httpsOnlyTransport struct {
 }
 
 func (t httpsOnlyTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	if http2DebugLogsRequests() {
-		if request.Body != nil {
-			request.Body.Close()
-		}
-		return nil, errors.New("refusing to send while GODEBUG=http2debug is enabled, because it logs the request URL")
+	err := checkRequestURL(request.URL)
+	if err == nil && http2DebugLogsRequests() {
+		err = errHTTP2Debug
 	}
-	if err := checkRequestURL(request.URL); err != nil {
+	if err != nil {
 		if request.Body != nil {
 			request.Body.Close()
 		}
@@ -343,45 +463,39 @@ func (t httpsOnlyTransport) RoundTrip(request *http.Request) (*http.Response, er
 	}
 	base := t.base
 	if base == nil {
-		// Looked up per request, so a transport installed later (a test
-		// fake, httpmock) is the one used.
-		base = http.DefaultTransport
+		base = sdkTransport()
 	}
 	return base.RoundTrip(request)
 }
 
-// http2DebugEnabledAtInit is GODEBUG as this process started. net/http reads
-// that once, so clearing GODEBUG later does not stop the frame log.
-var http2DebugEnabledAtInit = godebugEnablesHTTP2FrameLog(os.Getenv("GODEBUG"))
+var (
+	// builtinDefaultTransport is http.DefaultTransport as the program started.
+	builtinDefaultTransport = http.DefaultTransport
+	sdkTransportOnce        sync.Once
+	sdkTransportValue       http.RoundTripper
+)
 
-// http2DebugLogsRequests reports whether GODEBUG turns on the net/http
-// HTTP/2 frame log. That log writes the :path, and the API key is in it.
-func http2DebugLogsRequests() bool {
-	return http2DebugEnabledAtInit || godebugEnablesHTTP2FrameLog(os.Getenv("GODEBUG"))
+// sdkTransport is the transport every request goes through: the SDK's own
+// *http.Transport, cloned from the standard one (proxy from the environment,
+// TLS verification on, the standard dial and TLS timeouts) so a program
+// changing http.DefaultTransport's settings does not change the SDK's. If a
+// program or test replaced http.DefaultTransport with its own round tripper
+// (a fake, httpmock), that one is used, looked up per request.
+func sdkTransport() http.RoundTripper {
+	if current := http.DefaultTransport; current != builtinDefaultTransport {
+		return current
+	}
+	sdkTransportOnce.Do(func() {
+		if standard, ok := builtinDefaultTransport.(*http.Transport); ok {
+			sdkTransportValue = standard.Clone()
+			return
+		}
+		sdkTransportValue = &http.Transport{Proxy: http.ProxyFromEnvironment}
+	})
+	return sdkTransportValue
 }
 
-// godebugEnablesHTTP2FrameLog reports whether a GODEBUG value turns on
-// net/http's HTTP/2 frame log. net/http matches the substrings http2debug=1
-// and http2debug=2 anywhere in the value, so a later http2debug=2 still logs
-// when an earlier one is 0. Any other non-zero http2debug setting is refused
-// too.
-func godebugEnablesHTTP2FrameLog(value string) bool {
-	if strings.Contains(value, "http2debug=1") || strings.Contains(value, "http2debug=2") {
-		return true
-	}
-	for _, part := range strings.Split(value, ",") {
-		part = strings.TrimSpace(part)
-		if !strings.HasPrefix(part, "http2debug=") {
-			continue
-		}
-		setting := strings.TrimPrefix(part, "http2debug=")
-		if setting != "" && setting != "0" {
-			return true
-		}
-	}
-	return false
-}
-
+// errorTransport fails every request with err, sending nothing.
 type errorTransport struct{ err error }
 
 func (t errorTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -391,8 +505,15 @@ func (t errorTransport) RoundTrip(request *http.Request) (*http.Response, error)
 	return nil, t.err
 }
 
+// timedHTTPClient returns a fresh client: no cookie jar (a global
+// http.DefaultClient.Jar must not receive or send cookies), the SDK's own
+// transport and the request timeout.
 func timedHTTPClient() *http.Client {
-	c := *http.DefaultClient
+	// A non-zero http.DefaultClient.Timeout replaces the 120 s default and a
+	// transport set on http.DefaultClient is used under the https check
+	// (both documented). Nothing else is copied: its cookie Jar in particular
+	// must not receive or send cookies.
+	c := &http.Client{Timeout: http.DefaultClient.Timeout}
 	if c.Timeout < 0 {
 		// net/http treats a negative Timeout as no deadline at all.
 		c.Timeout = 0
@@ -400,18 +521,18 @@ func timedHTTPClient() *http.Client {
 		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		}
-		return &c
+		return c
 	}
 	if c.Timeout == 0 {
 		c.Timeout = httpTimeout
 	}
-	c.Transport = httpsOnlyTransport{base: c.Transport}
+	c.Transport = httpsOnlyTransport{base: http.DefaultClient.Transport}
 	// A 3xx must not be followed. The API key is in the query string, and a
 	// redirect could send it to another host.
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
-	return &c
+	return c
 }
 
 // redactAPIKey masks the api_key query value of a request URL.
@@ -443,10 +564,10 @@ func DoGetRequest(requestURL string, object APIResponse) error {
 	return doGetRequestWith(requestURL, object, decodeJSONBody)
 }
 
-// doGetNonMessageRequest is DoGetRequest for a call whose result is never a
-// bare message, so a message-only body is reported as an error.
-func doGetNonMessageRequest(requestURL string, object APIResponse) error {
-	return doGetRequestWith(requestURL, object, decodeNonMessageJSONBody)
+// doGetValidateRequest is DoGetRequest for validate, whose greylist answer is a
+// bare {"Message": "<text>"}.
+func doGetValidateRequest(requestURL string, object APIResponse) error {
+	return doGetRequestWith(requestURL, object, decodeValidateJSONBody)
 }
 
 func doGetRequestWith(requestURL string, object APIResponse, decode func(int, string, []byte, interface{}) error) error {
@@ -469,6 +590,10 @@ func DoPostFormRequest(endpoint string, form url.Values, object APIResponse) err
 }
 
 func doPostFormRequest(cfg RequestConfig, endpoint string, form url.Values, object APIResponse) error {
+	return doPostFormRequestWith(cfg, endpoint, form, object, decodeJSONBody)
+}
+
+func doPostFormRequestWith(cfg RequestConfig, endpoint string, form url.Values, object APIResponse, decode func(int, string, []byte, interface{}) error) error {
 	if err := cfg.requireKey(); err != nil {
 		return err
 	}
@@ -477,7 +602,7 @@ func doPostFormRequest(cfg RequestConfig, endpoint string, form url.Values, obje
 	}
 	form.Set("api_key", cfg.APIKey)
 
-	urlToAccess, err := url.JoinPath(cfg.URI, endpoint)
+	urlToAccess, err := joinBaseURL(cfg.URI, endpoint)
 	if err != nil {
 		return fmt.Errorf("invalid URL (%s) or endpoint (%s) value", cfg.URI, endpoint)
 	}
@@ -492,5 +617,5 @@ func doPostFormRequest(cfg RequestConfig, endpoint string, form url.Values, obje
 	if err != nil {
 		return err
 	}
-	return decodeJSONBody(response.StatusCode, response.Header.Get("Content-Type"), body, object)
+	return decode(response.StatusCode, response.Header.Get("Content-Type"), body, object)
 }

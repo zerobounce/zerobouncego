@@ -61,7 +61,7 @@ func BulkEmailFinderSubmit(file EmailFinderCsvFile) (*FileValidationResponse, er
 	if file.File == nil {
 		return nil, fmt.Errorf("empty parameter: file")
 	}
-	requestURL, err := url.JoinPath(emailFinderBaseURL(), "sendfile")
+	requestURL, err := joinBaseURL(emailFinderBaseURL(), "sendfile")
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func BulkDomainSearchSubmit(file DomainSearchCsvFile) (*FileValidationResponse, 
 		"domain_column":  fmt.Sprintf("%d", file.DomainColumn),
 		"has_header_row": formatBoolField(file.HasHeaderRow),
 	}
-	requestURL, err := url.JoinPath(domainSearchBaseURL(), "sendfile")
+	requestURL, err := joinBaseURL(domainSearchBaseURL(), "sendfile")
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func ListEvaluatorSubmit(file ListEvaluatorCsvFile) (*FileValidationResponse, er
 	fields := map[string]string{
 		"email_address_column": fmt.Sprintf("%d", file.EmailAddressColumn),
 	}
-	requestURL, err := url.JoinPath(LIST_EVALUATOR_URI, "")
+	requestURL, err := joinBaseURL(LIST_EVALUATOR_URI, "")
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
 
 	// The list evaluator has its own base URL, not a path built from BULK_URI,
 	// and the file id is one path segment, so a slash in it must stay encoded.
-	requestURL, err := url.JoinPath(LIST_EVALUATOR_URI, url.PathEscape(strings.TrimSpace(fileID)))
+	requestURL, err := joinBaseURL(LIST_EVALUATOR_URI, url.PathEscape(strings.TrimSpace(fileID)))
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
 		return nil, err
 	}
 	result := map[string]interface{}{}
-	if err = decodeJSONBody(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, &result); err != nil {
+	if err = decodeJSONBodyAllowMessage(responseHTTP.StatusCode, responseHTTP.Header.Get("Content-Type"), body, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -183,7 +183,7 @@ func SendEvaluatedFile(fileID string) (*FileValidationResponse, error) {
 	if strings.TrimSpace(fileID) == "" {
 		return nil, fmt.Errorf("empty parameter: file_id")
 	}
-	requestURL, err := url.JoinPath(bulkV2Base(), "send-evaluated-file")
+	requestURL, err := joinBaseURL(bulkV2Base(), "send-evaluated-file")
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func ListS3Files(opts ListS3FilesOptions) ([]S3ListFileEntry, error) {
 	if strings.TrimSpace(opts.Search) != "" {
 		params.Set("search", opts.Search)
 	}
-	requestURL, err := url.JoinPath(bulkAPIRoot(), "listS3files")
+	requestURL, err := joinBaseURL(bulkAPIRoot(), "listS3files")
 	if err != nil {
 		return nil, err
 	}

@@ -4,14 +4,14 @@ package zerobouncego
 // Use for comparison: v.Status == zerobouncego.ValidateStatusValid
 // Unknown/future API values are not listed; compare against ValidateResponse.Status as string.
 const (
-	ValidateStatusNone        = ""
-	ValidateStatusValid       = "valid"
-	ValidateStatusInvalid     = "invalid"
-	ValidateStatusCatchAll    = "catch-all"
-	ValidateStatusUnknown     = "unknown"
-	ValidateStatusSpamtrap    = "spamtrap"
-	ValidateStatusAbuse       = "abuse"
-	ValidateStatusDoNotMail   = "do_not_mail"
+	ValidateStatusNone      = ""
+	ValidateStatusValid     = "valid"
+	ValidateStatusInvalid   = "invalid"
+	ValidateStatusCatchAll  = "catch-all"
+	ValidateStatusUnknown   = "unknown"
+	ValidateStatusSpamtrap  = "spamtrap"
+	ValidateStatusAbuse     = "abuse"
+	ValidateStatusDoNotMail = "do_not_mail"
 )
 
 // Validation sub-status values returned by the API (Validate, ValidateBatch).
@@ -39,7 +39,7 @@ const (
 	ValidateSubStatusLeadingPeriodRemoved    = "leading_period_removed"
 	ValidateSubStatusDoesNotAcceptMail       = "does_not_accept_mail"
 	ValidateSubStatusAliasAddress            = "alias_address"
-	ValidateSubStatusRoleBasedCatchAll        = "role_based_catch_all"
+	ValidateSubStatusRoleBasedCatchAll       = "role_based_catch_all"
 	ValidateSubStatusDisposable              = "disposable"
 	ValidateSubStatusToxic                   = "toxic"
 	ValidateSubStatusAlternate               = "alternate"

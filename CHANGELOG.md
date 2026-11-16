@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `InitializeWithURI` now returns an `error`. A call that ignores the result still compiles. A program that uses the function as a value (`func(string, ZbApiURL)`) does not, until it accepts the `error`.
+- The SDK now uses its own `*http.Transport` (cloned from `http.DefaultTransport`: proxy from the environment, TLS verification on) and a fresh `http.Client` with no cookie jar, the 120 s timeout and no redirect following. A global `http.DefaultClient.Jar` no longer receives or sends cookies for SDK calls. A replacement `http.DefaultTransport` (fake, httpmock) is still honoured.
+- **Behaviour change:** API keys with an ordinary space inside or any non-ASCII character are refused too, on both clients (texts as the other SDKs: "api_key has whitespace, control or invisible characters" / "api_key has characters that cannot be sent in an HTTP header").
+- `Initialize` and the exported URL variables cannot return an error; the send-time check is authoritative for them.
+- Publish workflow: the tag input reaches shell code only through `env`; a second run waits instead of overlapping (`concurrency`); the tag must match `^v[0-9]+\.[0-9]+\.[0-9]+$`; the test job confirms it checked out the commit `validate-tag` validated, no longer uses the `release` environment, runs `go vet` and tests both the `go.mod` floor and Go 1.27 with `GOTOOLCHAIN=local`. The `setup-go` pin comment names its exact tag (`v7.0.0`).
+- CHANGELOG: v2.0.0, v2.0.1, v2.0.2 and v2.1.0 are marked "tagged, never published" (go.mod path mismatch); added v2.0.1 and v2.1.4 entries and compare links; the v3.0.0 date is UTC (2026-11-11). AGENTS.md describes the two CI lanes and `go vet`.
+- Added runnable/compiling godoc examples (`example_test.go`: `ExampleNew` against a local test server, `ExampleClient_Validate`, `ExampleInitialize`, `ExampleZBApiError`).
 
 ### Deprecated
 
@@ -43,11 +49,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GetCredits` (and `Client.GetCredits`) refused `Credits` sent as a JSON integer, the form zerobounce.net's own example `{"Credits":2375323}` shows, with an error. It now accepts an integer sent either as a JSON string (`"-1"`, `"12345"`, as the live API sends it) or as a JSON integer; `CreditsRaw` holds the integer's text in both cases and `Credits()` returns it. A number that is not an integer (`5.5`, `5.0`, `1e3`), one out of `int` range, a string that is not an integer, any other JSON type, and a missing or `null` value are still a `*ZBApiError` with `StatusCode` 200. Affects 2.2.0 to 3.0.1.
 - The sendfile, deletefile and bulk-root file-job calls that return `*FileValidationResponse` (`BulkValidationSubmit[WithOptions]`, `AiScoringFileSubmit[WithOptions]`, `GenericFileSubmit[WithOptions]`, `BulkValidationFileDelete`, `AiScoringFileDelete`, `GenericFileDelete`, the S3 and SFTP/FTP file jobs) returned a 2xx whose `message` was neither a string nor a list of strings (`5`, `true`, `{}`, `[5]`, `["a",5]`) as a result. It is now a `*ZBApiError` with that 2xx status and `ZeroBounce returned JSON that is not the expected response.`; a string, a list of strings and `null` are still results. Affects 2.2.0 to 3.0.1.
 - An email-finder or domain-search answer whose keys are only message keys (`{"Message": ""}`, a blank message) returned a nil error, with empty fields, from every `FindEmail*` and `DomainSearch*` call. The same went for a `null`, a number or an empty list as the message, and for `{"error": ""}`. These are now a `*ZBApiError` with `StatusCode` 200 whatever the message's value, as a non-blank message already was. Affects 2.2.0 to 3.0.1. The greylist answer `{"Message": ...}` of `Validate` is still a result.
+- **Behaviour change:** the message-only check above also covers `{"error":"x"}`, `{"error":[...]}`, validate (only `{"Message": "<non-blank text>"}` is the greylist result) and the rest of the ~45 typed calls (usage, activity, validate and its variants, batch, score, bulk submit/status/delete, S3/SFTP, SendEvaluatedFile, ListEvaluatorSubmit). Exempt: validate's greylist answer, the raw-JSON filter calls, the list-evaluator result, Inbox Placement and Warmup.
+- **Behaviour change:** an empty 2xx body on the seven non-DELETE Inbox Placement calls is an error (DELETE with an empty 204/200 stays a success).
+- **Behaviour change:** `"success": 0`, `"0"` and `" False "` (any case, whitespace ignored) are failures, like `false`.
+- **Behaviour change:** an error message given as a list keeps every non-blank line, joined with a line break (before: only the first).
+- `EmailToValidate.IPAddress` is omitted from the batch request when empty (before: `"ip_address":""`).
+- HTML error-page titles are found on the original bytes, so a page with a character whose lower-casing changes the byte length (e.g. "İ") no longer garbles or loses the title.
+- **Behaviour change:** a getfile / Warmup CSV download whose body is JSON is now an error and nothing is written. Before: only an object with success/message/error keys under a non-JSON content type was caught; a UTF-8 BOM before the JSON, a JSON list, any other JSON object, or `application/problem+json` / `*+json` content types were saved as the result file. Now: BOM stripped, any JSON object or list is refused, and `application/json` and `*/*+json` content types are refused. `GetFileJSONIndicatesError` follows the same rules.
+- Multipart uploads: CR and LF are removed from `FileName` (header injection into the part); `"` and `\` stay escaped. Errors from writing multipart fields and the file part are now returned instead of ignored.
+- The Dockerfile's test image (`docker build` then `docker run`) failed with `failed to initialize build cache at /.cache/go-build: permission denied`: it runs as user 65532 with `HOME=/`. `GOCACHE` is now `/tmp/go-build`, and the base image is pinned by digest. CI builds the image and runs the tests in it (new `docker` job in `sdk_ci.yml`); Dependabot keeps the digest current (Docker entry, `golang` major/minor ignored).
 
 ### Security
 
 - A base URL with userinfo (`https://api.zerobounce.net@evil.example/v2`) was accepted by `SetURI`, a `Client`'s `URI` and `NewWarmupClient`, and the API key was sent to the host after the `@`. It is now refused before the request.
 - An error built from a response body now also masks a secret when the server echoes it in a different case, including a percent-encoded copy of that case. This covers the API key, the Warmup key and the SMTP password.
+- Redaction also decodes HTML entities (named, decimal, hex) and `\'` before checking for a secret, for the API key, the Warmup key and the SMTP password.
 - An API key padded with a format character (U+200B, U+FEFF, U+180E, or any other Unicode format character), a C1 control, a Unicode space in the middle of the key (U+00A0, U+1680, U+2028, U+2029, U+3000), or an invisible character that is not a format character (U+034F, U+115F, U+1160, U+17B4, U+17B5, U+180B–U+180F, U+2065, U+2800, U+3164, U+FFA0, U+FFF0–U+FFF8, and variation selectors and tags U+E0000–U+E0FFF) is rejected before a request, on the main client and on Warmup.
 - An error built from a response body now also drops a secret when a named HTML entity in it is upper-cased (`&APOS;` for a secret that contains `'`). `encoding/html` only unescapes that name in lower case.
 - `LoadEnvFromFile` no longer prints a rejected `ZERO_BOUNCE_URI`, and it does not leave that URL in place. The parse error quotes the whole URL, and that URL can contain the API key. The message is now fixed.
@@ -57,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An error built from a response body no longer carries the API key. A body that echoed the key (`{"error": "Invalid API key <key>"}` or `{"success": false, "message": "... <key>"}` on an HTTP 200, a 400 quoting the request URL with `?api_key=<key>`, a JSON error on a 4xx/5xx, a getfile JSON error, `ValidateBatch`'s error for address `all`) was passed on as the error text or `ZBApiError.Message` by every call except the Warmup ones, and by `ErrorFromResponse`. Every key a request has been sent with is now masked as `***` in such a message, as sent, URL-encoded and JSON-escaped, and so is any `api_key=` value. The Warmup client already masked its key and shares the same masking now.
 - Redaction is now closed under encoding. After the known spellings of a secret are masked, the rest of an error message built from a response body is decoded up to four layers deep (the SDK's own request encoding plus three layers a server may echo it in) in every order (percent-decoding, percent-decoding with `+` as a space, JSON-unescaping including `\/` and `\uXXXX`, a backslash-escaped single quote, a `\xHH` byte, a doubled quote, and an HTML character reference such as `&#39;` or `&quot;`); if any decoded view still holds an API key, the Warmup key or the SMTP username or password, the whole message is replaced with `ZeroBounce's response was omitted from this error because it contained a credential.` A body that echoed a secret in a spelling the masking did not generate (lowercase percent escapes, a URL encoding of a URL encoding, a third layer, `\'`, `''` or `&#39;` for a secret that contains a quote) used to hand it to the caller, on every call. Applies to `ZBApiError.Message`, the Warmup client's errors and `ErrorFromResponse`.
 - Secrets (API keys, and the Warmup SMTP/IMAP credentials) are now also masked in URL encoding with spaces as `%20` as well as `+`, in the HTML-safe JSON escaping `encoding/json` writes (`\u003c`, `\u003e`, `\u0026`), as the URL encoding of each JSON-escaped form, which is how a server echoes a URL-encoded JSON request body, and JSON-escaped twice (a JSON error body quoting the JSON request body). Longer forms are masked first, so no fragment of a secret is left behind.
+- **Behaviour change:** base URLs are validated with net/url: https scheme (http only to loopback), a valid host (DNS name or IP/[IPv6]), a valid port, no userinfo, no whitespace/control/backslash. Checked in `SetURI`, `NewWarmupClient` and again on every send (`Client.URI`/`BulkURI`, package variables, evaluator/IPT, Warmup). Before: `https://api.zerobounce.net@evil.example/v2` sent the key to evil.example, and Warmup accepted `https://exa mple.com` and `https://`.
+- `Client`, `RequestConfig` and `WarmupClient` print base URLs without userinfo.
 
 ## [3.0.1] - 2026-11-11
 
@@ -160,7 +178,9 @@ Details for each are under Added, Changed and Fixed below.
 
 ## [2.1.4] - 2026-08-14
 
-Published to the module proxy. The changes in this tag were not written up in this file; 2.2.0 is the next section that records behaviour.
+### Changed
+
+- Dependency and GitHub Actions bumps (Dependabot); `TestInvalidApiKey` is skipped in `-short` mode. No change to the library's behaviour.
 
 ## [2.1.3] - 2026-06-10
 
@@ -170,11 +190,13 @@ Published to the module proxy. The changes in this tag were not written up in th
 
 ## [2.1.1] - 2026-04-08
 
+First v2 release the Go module proxy serves: v2.0.0, v2.0.1, v2.0.2 and v2.1.0 were tagged while `go.mod` still named the module without `/v2`, so `go get` could not resolve them.
+
 ### Fixed
 
 - The module path is `github.com/zerobounce/zerobouncego/v2`, so v2 tags resolve on proxy.golang.org.
 
-## [2.1.0] - 2026-04-05
+## [2.1.0] - 2026-04-05 (tagged, never published)
 
 ### Added
 
@@ -186,17 +208,19 @@ Published to the module proxy. The changes in this tag were not written up in th
 
 - Bulk `getfile` returns an error when the body is a JSON error, including HTTP 200 with `"success": false`, instead of saving that body as the results file.
 
-## [2.0.2] - 2026-03-03
+## [2.0.2] - 2026-03-03 (tagged, never published)
 
 ### Changed
 
 - License the project under MIT.
 
-## [2.0.1] - 2026-03-03
+## [2.0.1] - 2026-03-03 (tagged, never published)
 
-Tagged, never published. The module path had no `/v2` suffix, so proxy.golang.org does not serve this tag.
+### Changed
 
-## [2.0.0] - 2026-03-03
+- Repository workflows only (`sdk_ci.yml`, auto-assign). No change to the library.
+
+## [2.0.0] - 2026-03-03 (tagged, never published)
 
 ### Added
 
