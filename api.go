@@ -55,10 +55,10 @@ func (c *CreditsResponse) hasRequiredFields([]byte) bool {
 }
 
 // hasRequiredFields refuses a validate answer without address and status
-// strings, unless it is the greylist {"Message": ...} answer.
+// strings, unless it is exactly the greylist {"Message": "<text>"} answer.
 func (v *ValidateResponse) hasRequiredFields(body []byte) bool {
 	var fields validateRequiredFields
-	return json.Unmarshal(body, &fields) == nil && fields.complete()
+	return json.Unmarshal(body, &fields) == nil && (fields.complete() || greylistBody(body))
 }
 
 // Credits is the balance; -1 is the API's answer for an invalid key. A

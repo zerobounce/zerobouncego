@@ -15,6 +15,7 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 const maxJSONBodyBytes = 2 << 20
@@ -85,30 +86,116 @@ func maskSecrets(text string, secrets ...string) string {
 		if secret == "" {
 			continue
 		}
-		for _, form := range secretForms(secret) {
-			text = foldPattern(form).ReplaceAllLiteralString(text, "***")
-		}
+		text = maskForms(text, secretForms(secret))
 	}
 	return text
 }
 
-// foldPatterns caches the case-insensitive pattern for each secret form.
-var foldPatterns sync.Map
-
-// foldPattern matches form ignoring case (Unicode simple case folding), so an
-// upper-cased or lower-cased echo of a secret is found too.
-func foldPattern(form string) *regexp.Regexp {
-	if cached, ok := foldPatterns.Load(form); ok {
-		return cached.(*regexp.Regexp)
+// maskForms replaces every occurrence of each form in text with ***, ignoring
+// case under Unicode full case folding (so "ß" is found as "SS" and "ss", and
+// "ﬁ" as "FI"). Text and forms are folded and the matches are mapped back to
+// the original text, which is masked whole: a match that covers part of one
+// original character masks that character. Overlapping matches become one ***.
+func maskForms(text string, forms []string) string {
+	for _, form := range forms {
+		text = strings.ReplaceAll(text, form, "***")
 	}
-	pattern := regexp.MustCompile("(?i)" + regexp.QuoteMeta(form))
-	foldPatterns.Store(form, pattern)
-	return pattern
+	folded, starts, ends, offsets := foldIndex(text)
+	var spans [][2]int
+	seen := map[string]bool{}
+	for _, form := range forms {
+		needle := foldString(form)
+		if needle == "" || seen[needle] {
+			continue
+		}
+		seen[needle] = true
+		for from := 0; from < len(folded); {
+			at := strings.Index(folded[from:], needle)
+			if at < 0 {
+				break
+			}
+			first := from + at
+			last := first + len(needle) - 1
+			spans = append(spans, [2]int{starts[runeAt(offsets, first)], ends[runeAt(offsets, last)]})
+			from = first + 1
+		}
+	}
+	if len(spans) == 0 {
+		return text
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i][0] < spans[j][0] })
+	var out strings.Builder
+	pos := 0
+	for i := 0; i < len(spans); {
+		start, end := spans[i][0], spans[i][1]
+		for i++; i < len(spans) && spans[i][0] <= end; i++ {
+			if spans[i][1] > end {
+				end = spans[i][1]
+			}
+		}
+		out.WriteString(text[pos:start])
+		out.WriteString("***")
+		pos = end
+	}
+	out.WriteString(text[pos:])
+	return out.String()
 }
 
-// containsFold reports whether text holds secret, ignoring case.
+// foldRune is the full case folding of one rune: the status-F table, else the
+// smallest rune of its simple-folding orbit.
+func foldRune(r rune, out *strings.Builder) {
+	if multi, ok := fullCaseFolds[r]; ok {
+		for _, m := range multi {
+			out.WriteRune(simpleFold(m))
+		}
+		return
+	}
+	out.WriteRune(simpleFold(r))
+}
+
+func simpleFold(r rune) rune {
+	smallest := r
+	for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+		if f < smallest {
+			smallest = f
+		}
+	}
+	return smallest
+}
+
+// foldString is s under full case folding.
+func foldString(s string) string {
+	var out strings.Builder
+	for _, r := range s {
+		foldRune(r, &out)
+	}
+	return out.String()
+}
+
+// foldIndex folds text and records, for every original rune, where it starts
+// and ends in text and where its folding starts in the folded string.
+func foldIndex(text string) (folded string, starts, ends, offsets []int) {
+	var out strings.Builder
+	for i := 0; i < len(text); {
+		r, width := utf8.DecodeRuneInString(text[i:])
+		starts = append(starts, i)
+		ends = append(ends, i+width)
+		offsets = append(offsets, out.Len())
+		foldRune(r, &out)
+		i += width
+	}
+	return out.String(), starts, ends, offsets
+}
+
+// runeAt is the index of the original rune whose folding holds byte offset.
+func runeAt(offsets []int, offset int) int {
+	return sort.Search(len(offsets), func(i int) bool { return offsets[i] > offset }) - 1
+}
+
+// containsFold reports whether text holds secret, ignoring case under full
+// case folding.
 func containsFold(text, secret string) bool {
-	return strings.Contains(text, secret) || foldPattern(secret).MatchString(text)
+	return strings.Contains(text, secret) || strings.Contains(foldString(text), foldString(secret))
 }
 
 // secretForms lists every form maskSecrets masks, longest first.
@@ -412,11 +499,13 @@ func statusError(statusCode int, message string) error {
 	return errors.New(message)
 }
 
-// apiError builds a ZBApiError, or nil when there is no message. The API key
-// is masked in the message (redactKeys).
+// apiError builds a ZBApiError. It never returns nil: it is called only on an
+// error path, and a blank message (a body that was only an "Error:" prefix)
+// becomes a fixed status-based one. The API key is masked in the message
+// (redactKeys).
 func apiError(statusCode int, message string) error {
-	if message == "" {
-		return nil
+	if strings.TrimSpace(message) == "" {
+		message = noMessageText
 	}
 	return &ZBApiError{StatusCode: statusCode, Message: redactKeys(message)}
 }
@@ -510,6 +599,15 @@ func bodyLooksLikeHTML(body string) bool {
 
 func contentTypeIsHTML(contentType string) bool {
 	return strings.Contains(strings.ToLower(contentType), "text/html")
+}
+
+// noMessageText is the message for an error whose text is blank once a
+// leading "Error:" or "[Error]:" is removed (the other SDKs use the same text).
+const noMessageText = "ZeroBounce returned an error with no message text."
+
+// blankErrorMessage is the message for an empty response body.
+func blankErrorMessage(status int) string {
+	return fmt.Sprintf("Empty response from ZeroBounce (HTTP %d)", status)
 }
 
 func stripErrorPrefix(message string) string {
@@ -663,7 +761,7 @@ func messageFromBody(status int, contentType, body string) string {
 	}
 	trimmed := strings.TrimSpace(body)
 	if trimmed == "" {
-		return fmt.Sprintf("Empty response from ZeroBounce (HTTP %d)", status)
+		return blankErrorMessage(status)
 	}
 	if trimmed[0] == '{' || trimmed[0] == '[' {
 		var parsed interface{}
@@ -679,20 +777,26 @@ func messageFromBody(status int, contentType, body string) string {
 				}
 			}
 			if message := firstAPIErrorField(object); message != "" {
-				return stripErrorPrefix(message)
+				if stripped := stripErrorPrefix(message); stripped != "" {
+					return stripped
+				}
+				return noMessageText
 			}
 		}
 		if len(trimmed) > 1000 {
 			return "ZeroBounce returned a response that is not valid JSON."
 		}
-		return stripErrorPrefix(trimmed)
+		if stripped := stripErrorPrefix(trimmed); stripped != "" {
+			return stripped
+		}
+		return noMessageText
 	}
 	if len(trimmed) > 1000 {
 		return "ZeroBounce returned a response that is not valid JSON."
 	}
 	message := stripErrorPrefix(trimmed)
 	if message == "" {
-		return fmt.Sprintf("Empty response from ZeroBounce (HTTP %d)", status)
+		return noMessageText
 	}
 	return message
 }
@@ -845,10 +949,11 @@ type validateRequiredFields struct {
 	Message *string `json:"Message"`
 }
 
-// complete reports whether a validate result has its address and status, or
-// is the greylist answer, which carries only "Message".
+// complete reports whether a result has its address and status. The greylist
+// answer (exactly {"Message": "<text>"}) is accepted by the validate call only
+// (see ValidateResponse.hasRequiredFields), never for a batch row.
 func (f validateRequiredFields) complete() bool {
-	return (f.Address != nil && f.Status != nil) || f.Message != nil
+	return f.Address != nil && f.Status != nil
 }
 
 func getFileBodyError(status int, contentType, body string) error {

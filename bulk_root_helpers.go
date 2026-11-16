@@ -75,7 +75,7 @@ func postBulkRootMultipart(requestURL string, file io.Reader, fileName string, f
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func postBulkRootFormAt(requestURL string, fields url.Values) (*FileValidationRe
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func postBulkRootForm(path string, fields url.Values) (*FileValidationResponse, 
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func bulkRootFileStatus(baseURL, fileID string) (*FileStatusResponse, error) {
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +182,9 @@ func bulkRootResultFetch(baseURL, fileID string, fileWriter io.Writer) error {
 	}
 	if strings.TrimSpace(fileID) == "" {
 		return fmt.Errorf("empty parameter: file_id")
+	}
+	if writerIsNil(fileWriter) {
+		return fmt.Errorf("empty parameter: file_writer")
 	}
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
@@ -235,7 +238,7 @@ func bulkRootFileDelete(baseURL, fileID string) (*FileValidationResponse, error)
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}

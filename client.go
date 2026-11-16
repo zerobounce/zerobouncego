@@ -16,6 +16,9 @@ const (
 
 // Client calls the API with its own key and base URLs.
 // It does not read or write the package-level API_KEY, URI, or BULK_URI.
+//
+// APIKey is an exported string field: a Client value prints it as *** (fmt,
+// json, xml, gob), but a program that prints the field itself prints the key.
 type Client struct {
 	APIKey  string
 	URI     string
@@ -117,7 +120,8 @@ func (c RequestConfig) Format(state fmt.State, verb rune) {
 }
 
 // redactedConfig is the JSON and gob shape of a client. The key is masked
-// because encoding/json and encoding/gob otherwise write the exported field.
+// because encoding/json and encoding/gob otherwise write the exported field,
+// and the base URLs lose the password of their userinfo.
 type redactedConfig struct {
 	APIKey  string
 	URI     string
@@ -125,7 +129,7 @@ type redactedConfig struct {
 }
 
 func redactedConfigOf(key, uri, bulk string) redactedConfig {
-	return redactedConfig{APIKey: redactedKey(key), URI: uri, BulkURI: bulk}
+	return redactedConfig{APIKey: redactedKey(key), URI: redactedURL(uri), BulkURI: redactedURL(bulk)}
 }
 
 // MarshalJSON keeps the API key out of json.Marshal, including when a Client

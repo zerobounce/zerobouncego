@@ -6,8 +6,8 @@ Go implementation for [ZeroBounce Email Validation API v2](https://www.zerobounc
 
 - Keep API keys on a trusted server. Do not embed them in mobile apps or browser JavaScript that untrusted users can inspect.
 - Every request must go to an `https://` URL, whichever way its base URL was set (`SetURI`, the `URI`, `BULK_URI`, `LIST_EVALUATOR_URI` and `INBOX_PLACEMENT_URI` variables, their `ZERO_BOUNCE_*_URI` environment variables, a `Client`'s `URI` and `BulkURI`, or the Warmup client's base URL). Any other URL is refused before the request is sent; plain `http://` is allowed only to `127.0.0.1`, `localhost` and `[::1]`, for local tests. Do not pass end-user-controlled hosts into those settings.
-- A base URL with userinfo (`https://api.zerobounce.net@evil.example`), no or an invalid host, whitespace or control characters, or a bad port is refused when it is configured (`SetURI`, `NewWarmupClient`) and again on every send, which is the authoritative check for `Client` fields and package variables set directly.
-- API keys with whitespace (a space or NBSP included), control, invisible (U+200B, U+FEFF) or non-ASCII characters are rejected before a request is sent. `Client` and `WarmupClient` print their key as `***` with every `fmt` verb. `json.Marshal`, `xml.Marshal` and `gob` of a `Client` do the same. `WarmupClient` has no exported fields, so those encodings do not include its key.
+- A base URL with userinfo (`https://api.zerobounce.net@evil.example`), a query, a bare `?` or a fragment (the SDK adds its own query), no or an invalid host, whitespace or control characters, or a bad port is refused when it is configured (`SetURI`, `NewWarmupClient`) and again on every send, which is the authoritative check for `Client` fields and package variables set directly.
+- API keys with whitespace (a space or NBSP included), control, invisible (U+200B, U+FEFF) or non-ASCII characters are rejected before a request is sent. `Client` and `WarmupClient` print their key as `***` with every `fmt` verb. `json.Marshal`, `xml.Marshal` and `gob` of a `Client` do the same. `WarmupClient` has no exported fields, so those encodings do not include its key. `Client.APIKey` is an exported field: a `Client` stored by value in an unexported field of your own struct is printed by `fmt` without its masking (`%v` of your struct shows the key), and reflection-based tools can read it. Store a `*Client` there, or keep the client out of values you log. `WarmupClient` keeps its key masked in either case.
 - Request URLs include `api_key` as a query parameter (ZeroBounce API contract). Do not log full request URLs or enable payload debug logging in production. While `GODEBUG` (as the program started, or now) contains `http2debug=1` or `=2` anywhere, or any other non-zero `http2debug` (net/http checks the substring, so a later `http2debug=0` does not turn it off), net/http would log every request path and the Warmup `API-Key` header, so the SDK refuses to send and returns an error; remove `http2debug` from `GODEBUG`.
 
 [Link to the original repo](https://github.com/antsanchez/gozerobounce)
@@ -32,7 +32,9 @@ zerobouncego.LoadEnvFromFile()
 ```
 3. by settings explicitly in code, using the following method, where a preferred URI can also be provided:
 ```go
-zerobouncego.InitializeWithURI("mysecretapikey", zerobouncego.ZB_API_URL_DEFAULT)
+if err := zerobouncego.InitializeWithURI("mysecretapikey", zerobouncego.ZB_API_URL_DEFAULT); err != nil {
+    log.Fatal(err)
+}
 ```
 
 `LoadEnvFromFile` loads `.env` and then calls `Initialize` with
@@ -346,7 +348,7 @@ Optional [v2 getfile](https://www.zerobounce.net/docs/email-validation-api-quick
 Non-CSV JSON error bodies—including some HTTP 200 responses with `"success": false`—produce an error; nothing is written to the result writer. For custom handling of raw bodies, use `GetFileJSONIndicatesError` and `FormatGetFileErrorMessage`.
 
 ```go
-fileID := "<FILE_ID>" // from BulkValidationSubmit
+fileID := "<FILE_ID>" // from BulkValidationSubmitWithOptions
 w, err := os.Create("results.csv")
 if err != nil {
 	log.Fatal(err)
@@ -586,7 +588,7 @@ Example export file:
 
 #### Bulk email finder, bulk domain search and list evaluator
 
-These upload a CSV like `BulkValidationSubmit` and follow the same
+These upload a CSV like `BulkValidationSubmitWithOptions` and follow the same
 submit / status / result / delete pattern. `BulkEmailFinderSubmit` needs
 `DomainColumn` and one of `FirstNameColumn` or `FullNameColumn` (columns are
 1-based), and says which is missing before uploading. `has_header_row` is always
@@ -953,12 +955,10 @@ func main() {
 ## Testing
 
 ### Run tests with Docker
-From the **`sdk-docs/`** folder in the SDKs monorepo:
+From the repository root:
 
 ```bash
-cd sdk-docs
-docker compose build go
-docker compose run --rm go
+docker build -t zerobouncego-test . && docker run --rm --network=none zerobouncego-test
 ```
 
 This runs unit tests only (`go test ./... -cover -short -v`); nothing calls the live API.
@@ -988,7 +988,7 @@ variables it reads and which calls spend credits.
 
 ## Publish
 
-1. Bump `Version` in `version.go` (keep `go.mod` module path aligned with the tag major), commit, tag (`vX.Y.Z`), push tag.
+1. Bump `Version` in `version.go` (keep `go.mod` module path aligned with the tag major), move the `[Unreleased]` entries in `CHANGELOG.md` under a new `## [X.Y.Z]` heading, and update the version string pinned in `TestOfflineVersionMatchesPackage` (`offline_api_test.go`, the comparison and the message). That test compares `Version` with a literal, so it fails until both match; nothing checks the CHANGELOG heading, so keep it in step by hand. Commit, tag (`vX.Y.Z`), push tag.
 2. **Actions → Publish → Run workflow** with that tag.
 
 Registry: [pkg.go.dev](https://pkg.go.dev/github.com/zerobounce/zerobouncego/v3) (indexed automatically from the Git tag)

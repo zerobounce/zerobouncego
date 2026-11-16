@@ -160,7 +160,7 @@ func TestRedirectIsReportedAsRefused(t *testing.T) {
 		{"", ""},
 		{"text/html", `<html><head><title>Moved</title></head><body><a href="https://evil.example/collect">here</a></body></html>`},
 	}
-	for _, status := range []int{301, 302, 307, 308} {
+	for _, status := range []int{301, 302, 303, 307, 308} {
 		for _, body := range bodies {
 			for _, call := range statusErrorCalls {
 				t.Run(call.name+"/"+http.StatusText(status), func(t *testing.T) {

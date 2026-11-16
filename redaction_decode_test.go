@@ -122,7 +122,7 @@ func TestRedactionIsClosedUnderEncoding(t *testing.T) {
 	}
 	redactors := map[string]func(string) string{
 		"API key":       redactKeys,
-		"Warmup key":    func(text string) string { return (&WarmupClient{apiKey: decodeSecret}).redact(text) },
+		"Warmup key":    func(text string) string { return (&WarmupClient{apiKey: keyHolder(decodeSecret)}).redact(text) },
 		"SMTP password": func(text string) string { return warmup.redact(text, decodeSecret, "smtp-user") },
 		"SMTP username": func(text string) string { return warmup.redact(text, "smtp-password", decodeSecret) },
 	}

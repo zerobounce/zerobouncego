@@ -176,7 +176,7 @@ var errPlainHTTP = errors.New("refusing to send the API key to a URL that is not
 
 // errBadURL refuses a request URL that names the wrong host, no host, or a
 // host that cannot be reached, so the key would go elsewhere or nowhere.
-var errBadURL = errors.New("refusing to send the API key to a URL that is not a valid https:// URL (a host, no userinfo, no whitespace or control characters, a valid port)")
+var errBadURL = errors.New("refusing to send the API key to a URL that is not a valid https:// URL (a host, no userinfo, no query or fragment, no whitespace or control characters, a valid port)")
 
 var hostLabels = regexp.MustCompile(`^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.?$`)
 
@@ -236,6 +236,20 @@ func checkRequestURL(parsed *url.URL) error {
 	if parsed.User != nil || parsed.Opaque != "" || !validURLHost(parsed) {
 		return errBadURL
 	}
+	// A request URL carries no fragment, and its query must parse: a second
+	// '?' or a malformed pair is what a base URL with a query leaves behind
+	// ("…/getcredits?x=1?api_key=KEY").
+	if parsed.Fragment != "" || parsed.RawFragment != "" {
+		return errBadURL
+	}
+	if parsed.RawQuery != "" {
+		if strings.Contains(parsed.RawQuery, "?") {
+			return errBadURL
+		}
+		if _, err := url.ParseQuery(parsed.RawQuery); err != nil {
+			return errBadURL
+		}
+	}
 	return nil
 }
 
@@ -251,6 +265,13 @@ func checkBaseURLText(raw string) error {
 		return err
 	}
 	if strings.ContainsFunc(raw, unsafeURLRune) {
+		return errBadURL
+	}
+	// A base URL is a scheme, a host and a path. The SDK appends its own
+	// query, so a base with a query, a bare '?' or a fragment would send the
+	// request somewhere else or put the API key in the wrong place.
+	if parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.RawFragment != "" ||
+		strings.ContainsAny(raw, "?#") {
 		return errBadURL
 	}
 	return nil
@@ -535,19 +556,25 @@ func timedHTTPClient() *http.Client {
 	return c
 }
 
-// redactAPIKey masks the api_key query value of a request URL.
+// apiKeyInText matches an api_key=<value> pair anywhere in a string, whatever
+// surrounds it: the value runs to the next &, # or white space.
+var apiKeyInText = regexp.MustCompile(`(?i)(api(?:_|%5f)key=)[^&#\s]*`)
+
+// redactAPIKey masks the api_key value of a request URL. It masks the parsed
+// query value, and then, as a backstop for a URL the parser reads differently
+// from the sender (a second '?', a fragment, a malformed query), any
+// api_key=<value> in the text.
 func redactAPIKey(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return "(url redacted)"
 	}
-	query := parsed.Query()
-	if _, found := query["api_key"]; !found {
-		return rawURL
+	if query := parsed.Query(); query.Has("api_key") {
+		query.Set("api_key", "REDACTED")
+		parsed.RawQuery = query.Encode()
+		rawURL = parsed.String()
 	}
-	query.Set("api_key", "REDACTED")
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
+	return apiKeyInText.ReplaceAllString(rawURL, "${1}REDACTED")
 }
 
 func httpGet(requestURL string) (*http.Response, error) {

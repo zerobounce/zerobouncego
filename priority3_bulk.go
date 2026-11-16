@@ -162,7 +162,7 @@ func GetListEvaluatorResult(fileID string) (map[string]interface{}, error) {
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +302,7 @@ func ListS3Files(opts ListS3FilesOptions) ([]S3ListFileEntry, error) {
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}

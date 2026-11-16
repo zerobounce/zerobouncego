@@ -35,43 +35,13 @@ func bodyIsJSONObjectOrListBytes(body []byte) bool {
 	return bodyIsJSONObjectOrList(string(bytes.TrimSpace(body)))
 }
 
-// GetFileJSONIndicatesError reports whether a getfile response body looks like a JSON error payload (including HTTP 200).
+// GetFileJSONIndicatesError reports whether a getfile response body is a JSON
+// object or list (after any BOM and white space), which is never a result file:
+// the API reports a failure that way, including on HTTP 200. Every JSON object
+// counts, whether or not it has a success, message or error field; a body that
+// only starts like JSON but is not valid JSON does not.
 func GetFileJSONIndicatesError(body string) bool {
-	s := trimBOMSpace(body)
-	if len(s) == 0 || (s[0] != '{' && s[0] != '[') {
-		return false
-	}
-	var o map[string]interface{}
-	if err := json.Unmarshal([]byte(s), &o); err != nil {
-		// Not an object: a list is still JSON, not a result file.
-		return s[0] == '[' && json.Valid([]byte(s))
-	}
-	if sv, ok := o["success"]; ok {
-		if b, ok := sv.(bool); ok && !b {
-			return true
-		}
-		if str, ok := sv.(string); ok {
-			if strings.EqualFold(str, "false") {
-				return true
-			}
-		}
-	}
-	for _, k := range []string{"message", "error", "error_message"} {
-		if v, ok := o[k]; ok && v != nil {
-			switch t := v.(type) {
-			case string:
-				if strings.TrimSpace(t) != "" {
-					return true
-				}
-			case []interface{}:
-				if len(t) > 0 {
-					return true
-				}
-			}
-		}
-	}
-	// Any other JSON object is not a result file either.
-	return true
+	return bodyIsJSONObjectOrList(body)
 }
 
 // FormatGetFileErrorMessage returns a short message from a getfile JSON error body.
@@ -84,17 +54,9 @@ func FormatGetFileErrorMessage(body string) string {
 		}
 		return s
 	}
-	for _, k := range []string{"message", "error", "error_message"} {
-		if v, ok := o[k]; ok && v != nil {
-			if str, ok := v.(string); ok && strings.TrimSpace(str) != "" {
-				return str
-			}
-			if arr, ok := v.([]interface{}); ok && len(arr) > 0 {
-				if str, ok := arr[0].(string); ok && strings.TrimSpace(str) != "" {
-					return str
-				}
-			}
-		}
+	// A list of messages is joined one per line, like messageFromBody.
+	if message := apiErrorField(o, []string{"message", "error", "error_message"}); message != "" {
+		return message
 	}
 	return s
 }

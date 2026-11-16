@@ -8,6 +8,8 @@ import (
 	"mime/multipart"
 	"net/url"
 	"os"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -219,7 +221,7 @@ func ImportCsvFile(path_to_file string, has_header bool, email_column int) (*Csv
 	}
 
 	csv_file := &CsvFile{
-		File: file, FileName: file.Name(), HasHeaderRow: has_header, EmailAddressColumn: email_column,
+		File: file, FileName: filepath.Base(file.Name()), HasHeaderRow: has_header, EmailAddressColumn: email_column,
 	}
 	return csv_file, nil
 }
@@ -290,7 +292,7 @@ func GenericFileSubmitWithOptions(
 	}
 
 	defer response_http.Body.Close()
-	body, error_ := io.ReadAll(response_http.Body)
+	body, error_ := readLimitedBody(response_http.Body, response_http.StatusCode)
 	if error_ != nil {
 		return nil, error_
 	}
@@ -331,7 +333,7 @@ func GenericFileStatusCheck(file_id, endpoint string) (*FileStatusResponse, erro
 	}
 
 	defer response_http.Body.Close()
-	body, error_ := io.ReadAll(response_http.Body)
+	body, error_ := readLimitedBody(response_http.Body, response_http.StatusCode)
 	if error_ != nil {
 		return nil, error_
 	}
@@ -351,6 +353,9 @@ func isScoringBulkEndpoint(endpoint string) bool {
 func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *GetFileOptions, scoring bool) error {
 	if err := packageConfig().requireKey(); err != nil {
 		return err
+	}
+	if writerIsNil(file_writer) {
+		return errors.New("empty parameter: file_writer")
 	}
 	params := url.Values{}
 	params.Set("api_key", API_KEY)
@@ -377,7 +382,7 @@ func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *G
 
 	body, err := io.ReadAll(response_http.Body)
 	if err != nil {
-		return errors.New("could not read response body: " + err.Error())
+		return fmt.Errorf("could not read response body: %w", err)
 	}
 
 	bodyStr := string(body)
@@ -388,9 +393,19 @@ func genericResultFetch(file_id, endpoint string, file_writer io.Writer, opts *G
 
 	_, err = file_writer.Write(body)
 	if err != nil {
-		return errors.New("could not write into given file: " + err.Error())
+		return fmt.Errorf("could not write into given file: %w", err)
 	}
 	return nil
+}
+
+// writerIsNil reports a nil writer, including a nil pointer inside the
+// interface, whose Write would panic after the request was already sent.
+func writerIsNil(w io.Writer) bool {
+	if w == nil {
+		return true
+	}
+	v := reflect.ValueOf(w)
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }
 
 // GenericResultFetch - save a csv containing the results of the file with the given file ID
@@ -423,7 +438,7 @@ func GenericFileDelete(file_id, endpoint string) (*FileValidationResponse, error
 		return nil, error_
 	}
 	defer response_http.Body.Close()
-	body, error_ := io.ReadAll(response_http.Body)
+	body, error_ := readLimitedBody(response_http.Body, response_http.StatusCode)
 	if error_ != nil {
 		return nil, error_
 	}

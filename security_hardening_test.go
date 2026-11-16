@@ -26,6 +26,10 @@ var unsafeBaseURLs = []string{
 	"https://[not-ipv6]/v2",
 	"https://[::1%25eth0]/v2",
 	"https:example.com",
+	"https://api.zerobounce.net/v2?x=1",
+	"https://api.zerobounce.net/v2?",
+	"https://api.zerobounce.net/v2/#",
+	"https://api.zerobounce.net/v2#frag",
 }
 
 // A base URL with userinfo, no host, a bad host or a bad port is refused when

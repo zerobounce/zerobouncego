@@ -186,5 +186,5 @@ jobs:
           done
           echo "Warning: proxy did not return 200 for $TAG within 5 minutes."
           echo "pkg.go.dev may still index shortly; verify manually:"
-          echo "  go get github.com/zerobounce/zerobouncego/v3@${TAG#v}"
+          echo "  go get github.com/zerobounce/zerobouncego/v3@${TAG}"
           exit 1

@@ -3,7 +3,6 @@ package zerobouncego
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -60,7 +59,7 @@ func postFilterForm(endpoint string, form url.Values) (map[string]interface{}, e
 		return nil, err
 	}
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +89,7 @@ func postFilterRequest(endpoint string, form url.Values) (*http.Response, error)
 
 func readFilterResponseBody(responseHTTP *http.Response) (json.RawMessage, error) {
 	defer responseHTTP.Body.Close()
-	body, err := io.ReadAll(responseHTTP.Body)
+	body, err := readLimitedBody(responseHTTP.Body, responseHTTP.StatusCode)
 	if err != nil {
 		return nil, err
 	}

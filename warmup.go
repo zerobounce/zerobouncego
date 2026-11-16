@@ -40,10 +40,25 @@ const warmupAnyTeamID = 1
 
 // WarmupClient is one Warmup API key. The key is bound to one team.
 type WarmupClient struct {
-	apiKey string
+	// apiKey is a function, not a string: fmt prints an unexported struct
+	// field by reflection, so a WarmupClient stored by value in another
+	// struct would print a string key through %v, %+v, %#v, %s and %q, but
+	// prints only an address for a function.
+	apiKey func() string
 	root   string
 	client *http.Client
 }
+
+// key is the API key, or "" for a zero WarmupClient.
+func (c WarmupClient) key() string {
+	if c.apiKey == nil {
+		return ""
+	}
+	return c.apiKey()
+}
+
+// keyHolder returns a function that yields key, for WarmupClient.apiKey.
+func keyHolder(key string) func() string { return func() string { return key } }
 
 // NewWarmupClient builds a client for a Warmup API key. An empty baseURL uses
 // WarmupDefaultBaseURL.
@@ -66,7 +81,7 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 		return nil, fmt.Errorf("invalid parameter: base_url: %w", err)
 	}
 	return &WarmupClient{
-		apiKey: apiKey,
+		apiKey: keyHolder(apiKey),
 		root:   strings.TrimRight(base, "/") + warmupBasePath,
 		client: timedHTTPClient(),
 	}, nil
@@ -74,7 +89,7 @@ func NewWarmupClient(apiKey, baseURL string) (*WarmupClient, error) {
 
 // String names the type and its base URL, with the API key redacted.
 func (c WarmupClient) String() string {
-	return fmt.Sprintf("WarmupClient{apiKey:%q, root:%q}", redactedKey(c.apiKey), redactedURL(c.root))
+	return fmt.Sprintf("WarmupClient{apiKey:%q, root:%q}", redactedKey(c.key()), redactedURL(c.root))
 }
 
 // GoString is String in Go syntax (%#v), with the API key redacted.
@@ -88,7 +103,7 @@ func (c WarmupClient) Format(state fmt.State, verb rune) {
 // redact removes every form of a secret from a message, and drops a message
 // that still holds one in a decoded view (omitIfSecretSurvives).
 func (c *WarmupClient) redact(text string, secrets ...string) string {
-	all := append([]string{c.apiKey}, secrets...)
+	all := append([]string{c.key()}, secrets...)
 	return omitIfSecretSurvives(maskSecrets(text, all...), all...)
 }
 
@@ -121,7 +136,7 @@ func (c *WarmupClient) send(method, path string, params url.Values, body interfa
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("%s", c.redact(err.Error(), secrets...))
 	}
-	request.Header.Set("API-Key", c.apiKey)
+	request.Header.Set("API-Key", c.key())
 	request.Header.Set("Accept", CONTENT_TYPE_JSON)
 	if body != nil {
 		request.Header.Set("Content-Type", CONTENT_TYPE_JSON)
@@ -140,8 +155,11 @@ func (c *WarmupClient) send(method, path string, params url.Values, body interfa
 			Message:    redirectRefusedMessage,
 		}
 	}
-	payload, err := io.ReadAll(response.Body)
+	payload, err := readLimitedBody(response.Body, response.StatusCode)
 	if err != nil {
+		if apiErr, ok := err.(*ZBApiError); ok {
+			return response.StatusCode, nil, response.Header, apiErr
+		}
 		return response.StatusCode, nil, response.Header, fmt.Errorf("%s", c.redact(err.Error(), secrets...))
 	}
 	if response.StatusCode > 299 {
@@ -761,10 +779,8 @@ func warmupMessageFromBody(body []byte, status int) string {
 		}
 		// A top-level list of strings, e.g. ["In-progress tests cannot be deleted."].
 		if list, ok := parsed.([]interface{}); ok {
-			for _, item := range list {
-				if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
-					return text
-				}
+			if message := apiErrorField(map[string]interface{}{"m": list}, []string{"m"}); message != "" {
+				return message
 			}
 		}
 		if mapped, ok := parsed.(map[string]interface{}); ok {
@@ -778,8 +794,9 @@ func warmupMessageFromBody(body []byte, status int) string {
 					if len(value) == 0 {
 						continue
 					}
-					if text, ok := value[0].(string); ok && strings.TrimSpace(text) != "" {
-						return text
+					// Strings are joined one per line, like messageFromBody.
+					if message := apiErrorField(mapped, []string{key}); message != "" {
+						return message
 					}
 					// A validation error list: [{loc: [...], msg: "..."}].
 					if item, ok := value[0].(map[string]interface{}); ok {
