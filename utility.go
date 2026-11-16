@@ -551,10 +551,38 @@ type redactingTransport struct{ inner http.RoundTripper }
 
 func (t redactingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	response, err := t.inner.RoundTrip(request)
-	if err == nil {
-		return response, nil
+	if err != nil {
+		return response, redactTransportError(err, requestSecrets(request)...)
 	}
-	return response, redactTransportError(err, requestSecrets(request)...)
+	if response != nil && response.Body != nil {
+		// A body that fails while it is read (a timeout mid-body, a cut-short
+		// body, a caller transport whose Read error quotes the request) gets
+		// the same redaction as a failed request.
+		response.Body = &redactingBody{ReadCloser: response.Body, secrets: requestSecrets(request)}
+	}
+	return response, nil
+}
+
+// redactingBody passes a response body's Read and Close errors through
+// redactTransportError. io.EOF is returned as it is.
+type redactingBody struct {
+	io.ReadCloser
+	secrets []string
+}
+
+func (b *redactingBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err != nil && err != io.EOF {
+		err = redactTransportError(err, b.secrets...)
+	}
+	return n, err
+}
+
+func (b *redactingBody) Close() error {
+	if err := b.ReadCloser.Close(); err != nil {
+		return redactTransportError(err, b.secrets...)
+	}
+	return nil
 }
 
 // transport error kinds a redacted error still answers errors.Is for.
