@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-16
+
 ### Added
 
 - `BulkValidationSubmitWithOptions`, `AiScoringFileSubmitWithOptions` and `GenericFileSubmitWithOptions`, which take a `*SendFileOptions`. `remove_duplicate` is sent only when `SendFileOptions.RemoveDuplicate` is set, so the API's default (`true`) applies otherwise; a nil `*SendFileOptions` sends neither.
@@ -283,7 +285,8 @@ First v2 release the Go module proxy serves: v2.0.0, v2.0.1, v2.0.2 and v2.1.0 w
 
 - Initial release: `GetCredits`, `GetApiUsage`, `Validate`, `ValidateBatch`, bulk validation and AI scoring file methods, and `GetActivityData`.
 
-[Unreleased]: https://github.com/zerobounce/zerobouncego/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/zerobounce/zerobouncego/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/zerobounce/zerobouncego/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/zerobounce/zerobouncego/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/zerobounce/zerobouncego/compare/v2.2.0...v3.0.0
 [2.2.0]: https://github.com/zerobounce/zerobouncego/compare/v2.1.4...v2.2.0
